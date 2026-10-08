@@ -4,7 +4,7 @@ import { t } from "./i18n";
 
 type StatusThread = Pick<
   PluginSidebarThread,
-  "indicator" | "indicatorLabel" | "hasPendingInteraction"
+  "indicator" | "indicatorLabel" | "hasPendingInteraction" | "isUnread"
 > & {
   // Newer hosts expose these refinements; older hosts supply the indicator.
   status?: string;
@@ -43,7 +43,9 @@ export function ThreadStatus({ thread }: { thread: StatusThread }) {
         ? "error"
         : waiting
           ? "idle"
-          : "done";
+          : thread.isUnread
+            ? "done"
+            : "read";
   const icon =
     state === "waiting"
       ? "MessageQuestion"
@@ -53,22 +55,30 @@ export function ThreadStatus({ thread }: { thread: StatusThread }) {
           ? "AlertCircle"
           : state === "idle"
             ? "Circle"
-            : "CircleCheck";
+            : state === "done"
+              ? "CircleCheck"
+              : null;
 
   return (
     <span
       className="pf-status"
-      role="img"
+      role={icon ? "img" : undefined}
+      aria-hidden={icon ? undefined : true}
       aria-label={
-        thread.indicatorLabel ?? (state === "done" ? t("Готово") : undefined)
+        icon
+          ? (thread.indicatorLabel ??
+            (state === "done" ? t("Готово") : undefined))
+          : undefined
       }
       data-thread-status={state}
     >
-      <Icon
-        name={icon}
-        aria-hidden="true"
-        className={state === "working" ? "pf-status-spinner" : undefined}
-      />
+      {icon && (
+        <Icon
+          name={icon}
+          aria-hidden="true"
+          className={state === "working" ? "pf-status-spinner" : undefined}
+        />
+      )}
     </span>
   );
 }

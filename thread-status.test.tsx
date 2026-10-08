@@ -15,6 +15,7 @@ const idle = {
   indicator: "none" as const,
   indicatorLabel: null,
   hasPendingInteraction: false,
+  isUnread: true,
 };
 
 it("replaces a running spinner with a circled check when the turn finishes", () => {
@@ -39,6 +40,32 @@ it("uses the plugin language for the completion label", () => {
   localStorage.setItem("project-folders:language", "ru");
   const view = render(<ThreadStatus thread={idle} />);
   expect(view.getByRole("img", { name: "Готово" })).toBeTruthy();
+});
+
+it("hides the completion check and its label once the result is read", () => {
+  const view = render(<ThreadStatus thread={idle} />);
+  expect(
+    view.container.querySelector('[data-icon="CircleCheck"]'),
+  ).not.toBeNull();
+  view.rerender(<ThreadStatus thread={{ ...idle, isUnread: false }} />);
+  expect(view.container.querySelector('[data-icon="CircleCheck"]')).toBeNull();
+  expect(view.queryByRole("img")).toBeNull();
+  expect(
+    view.container
+      .querySelector(".pf-status")
+      ?.getAttribute("data-thread-status"),
+  ).toBe("read");
+});
+
+it("keeps a running loader even when the thread has been read", () => {
+  const view = render(
+    <ThreadStatus
+      thread={{ ...idle, isUnread: false, indicator: "runtime" }}
+    />,
+  );
+  expect(
+    view.container.querySelector('[data-icon="Spinner"].pf-status-spinner'),
+  ).not.toBeNull();
 });
 
 it.each(["starting", "active", "stopping", "provisioning"])(
