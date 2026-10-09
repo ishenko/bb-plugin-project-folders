@@ -1,5 +1,6 @@
 import { FolderBrowser } from "./folder-browser";
 import { ThreadSectionLabel } from "./thread-section-label";
+import { ThreadStatus } from "./thread-status";
 import {
   MoveDialog,
   PendingMoves,
@@ -1802,16 +1803,7 @@ function ThreadRow({
           }}
           title={thread.indicatorLabel ?? undefined}
         >
-          <span
-            className="pf-status"
-            aria-label={thread.indicatorLabel ?? undefined}
-          >
-            {thread.hasPendingInteraction
-              ? "◉"
-              : thread.indicator === "runtime"
-                ? "●"
-                : "·"}
-          </span>
+          <ThreadStatus thread={thread} />
           {thread.isPinned && <Icon name="Pin" />}
           <span
             onDoubleClick={(event) => {

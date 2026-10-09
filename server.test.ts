@@ -2489,6 +2489,110 @@ describe("githubUrl on list", () => {
 });
 
 describe("background history export", () => {
+  it.each([
+    ["personal", "proj_personal", "/personal/chat", null],
+    ["worktree", "p1", "/worktrees/task", null],
+    ["archived", "p1", null, 1],
+  ])(
+    "skips unregistered %s history without persisting errors or retrying",
+    async (_kind, projectId, workspace, archivedAt) => {
+      const h = await setup();
+      const thread = makeThreadResponse({
+        id: "unbound",
+        projectId,
+        environmentId: "e1",
+        archivedAt,
+      });
+      h.harness.inspection.sdk.stub("threads.get", async () => thread);
+      h.harness.inspection.sdk.stub("environments.get", async () => ({
+        projectId,
+        hostId: "h1",
+        path: workspace,
+      }));
+      vi.useFakeTimers();
+      try {
+        await h.harness.behavior.emitThreadEvent(
+          archivedAt ? "thread.archived" : "thread.idle",
+          { thread },
+        );
+        await vi.advanceTimersByTimeAsync(2100);
+        const result = (await h.harness.behavior.callRpc("list", null)) as {
+          errors: string[];
+        };
+        expect(result.errors).toEqual([]);
+        expect(
+          h.bb.storage
+            .database()
+            .prepare("SELECT * FROM pending_exports")
+            .all(),
+        ).toEqual([]);
+        expect(h.writes).toEqual([]);
+        const calls = h.harness.inspection.sdk.callsTo("threads.get").length;
+        await vi.advanceTimersByTimeAsync(65000);
+        expect(h.harness.inspection.sdk.callsTo("threads.get")).toHaveLength(
+          calls,
+        );
+        await expect(
+          h.harness.behavior.callRpc("sync", { threadId: thread.id }),
+        ).rejects.toThrow(
+          "The chat working folder is not registered in the tree.",
+        );
+        expect(
+          (
+            (await h.harness.behavior.callRpc("list", null)) as {
+              errors: string[];
+            }
+          ).errors,
+        ).toEqual([]);
+      } finally {
+        await h.harness.lifecycle.dispose();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("cleans only stale unregistered-export diagnostics on reload and preserves project state", async () => {
+    const h = await setup();
+    let current = h;
+    try {
+      const db = h.bb.storage.database();
+      const insert = db.prepare("INSERT INTO exports VALUES (?,?,?,?)");
+      const unregistered =
+        "Error: The chat working folder is not registered in the tree.";
+      insert.run("stale", null, unregistered, Date.now());
+      insert.run("real-error", null, "Error: disk full", Date.now());
+      insert.run("success", "/work/.bb/chats/success", null, Date.now());
+      insert.run(
+        "with-path",
+        "/work/.bb/chats/with-path",
+        unregistered,
+        Date.now(),
+      );
+      const section = (await h.harness.behavior.callRpc("create", {
+        projectId: "p1",
+        folderId: null,
+        name: "Keep",
+        relativePath: "keep",
+      })) as { id: string };
+      Object.assign(current, await h.harness.lifecycle.reload(plugin));
+      const rows = current.bb.storage
+        .database()
+        .prepare("SELECT threadId FROM exports ORDER BY threadId")
+        .all();
+      expect(rows).toEqual([
+        { threadId: "real-error" },
+        { threadId: "success" },
+        { threadId: "with-path" },
+      ]);
+      const tree = (await current.harness.behavior.callRpc("list", null)) as {
+        folders: { id: string }[];
+      };
+      expect(tree.folders.map((f) => f.id)).toContain(section.id);
+    } finally {
+      await current.harness.lifecycle.dispose();
+    }
+  });
+
   async function history() {
     const h = await setup();
     const files = new Map<string, string>();
@@ -2589,6 +2693,10 @@ describe("background history export", () => {
         h.harness.behavior.callRpc("sync", { threadId: "t1" }),
       ).rejects.toThrow("offline");
       expect(h.files.get(indexPath)).toBe(previous);
+      const result = (await h.harness.behavior.callRpc("list", null)) as {
+        errors: string[];
+      };
+      expect(result.errors).toEqual(["t1: Error: offline"]);
     } finally {
       await h.harness.lifecycle.dispose();
     }

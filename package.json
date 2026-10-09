@@ -1,14 +1,14 @@
 {
   "name": "bb-plugin-project-folders",
-  "version": "0.6.30",
+  "version": "0.6.30-igor.1",
   "type": "module",
   "engines": {
-    "bb": ">=0.43.3",
-    "bbPluginSdk": ">=0.4.84"
+    "bb": ">=0.45.0",
+    "bbPluginSdk": ">=0.6.15"
   },
   "bb": {
     "name": "Projects & Sections",
-    "description": "Organize BB projects into real folders with section chats, working rules and restorable archives.",
+    "description": "Personal fork: real project sections with quiet out-of-scope chat exports and preserved customizations.",
     "branding": {
       "icon": "Folder"
     },
@@ -24,7 +24,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@get-bb/plugin-sdk": "0.4.104",
+    "@get-bb/plugin-sdk": "0.6.15",
     "@pierre/diffs": "^1.2.9",
     "@radix-ui/react-alert-dialog": "^1.1.19",
     "@radix-ui/react-context-menu": "^2.3.3",
@@ -71,11 +71,11 @@
   "author": "Kirill Vechkasov",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/VKirill/bb-plugin-project-folders.git"
+    "url": "git+https://github.com/ishenko/bb-plugin-project-folders.git"
   },
-  "homepage": "https://github.com/VKirill/bb-plugin-project-folders",
+  "homepage": "https://github.com/ishenko/bb-plugin-project-folders",
   "bugs": {
-    "url": "https://github.com/VKirill/bb-plugin-project-folders/issues"
+    "url": "https://github.com/ishenko/bb-plugin-project-folders/issues"
   },
   "scripts": {
     "test": "vitest run",

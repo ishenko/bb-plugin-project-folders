@@ -10,7 +10,6 @@ import { createPortal } from "react-dom";
 import {
   experimental_useSidebarThreads,
   useComposer,
-  useComposerView,
   useRealtime,
   useRpc,
 } from "@get-bb/plugin-sdk/app";
@@ -154,7 +153,7 @@ export function ComposerProjectChip() {
   useLanguage();
   const rpc = useRpc<typeof rpcContract>();
   const composer = useComposer();
-  const view = useComposerView();
+  const view = useComposer();
   const marker = useRef<HTMLSpanElement>(null);
   const [slot, setSlot] = useState<{
     node: HTMLElement;
@@ -214,7 +213,7 @@ export function ComposerProjectChip() {
   // A sent message starts a fresh draft.
   useEffect(
     () =>
-      composer.experimental_onSubmitted(() => {
+      composer.onSubmitted(() => {
         setChosen(null);
         setError("");
         rememberPick(null);
@@ -290,7 +289,7 @@ export function ComposerProjectChip() {
           folderId: folder.id,
         });
       } else rememberPick(null);
-      await composer.experimental_setSelection({
+      await composer.setSelection({
         projectId: entry.projectId,
         // A project BB knows and the plugin has no folder for keeps BB's own
         // environment: there is nothing here to point it at.

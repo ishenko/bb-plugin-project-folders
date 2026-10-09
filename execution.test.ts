@@ -11,7 +11,15 @@ import {
   placeOnHost,
   resolveExecution,
   seedMachineId,
+  executionSchema,
 } from "./execution";
+
+it("preserves provider-defined service tiers from the current BB picker", () => {
+  expect(executionSchema.parse({ serviceTier: "ultrafast" }).serviceTier).toBe(
+    "ultrafast",
+  );
+  expect(executionSchema.safeParse({ serviceTier: "" }).success).toBe(false);
+});
 
 const root = {
   id: "p1",

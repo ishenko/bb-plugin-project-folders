@@ -65,6 +65,16 @@ import {
   type ExecutionLayer,
 } from "./execution";
 
+const UNREGISTERED_CHAT_FOLDER_MESSAGE =
+  "The chat working folder is not registered in the tree.";
+// An unbound workspace is outside this plugin's export scope, not a failed write.
+class UnregisteredChatFolderError extends Error {
+  constructor() {
+    super(UNREGISTERED_CHAT_FOLDER_MESSAGE);
+  }
+}
+const UNREGISTERED_CHAT_FOLDER_ERROR = `Error: ${UNREGISTERED_CHAT_FOLDER_MESSAGE}`;
+
 const defaultAgentsTemplate = `# Section rules
 
 User instructions take priority. Read the project AGENTS.md and parent sections first — their rules apply alongside these.
@@ -782,6 +792,11 @@ export default async function plugin(bb: BbPluginApi) {
     `DROP TABLE folders`,
     `ALTER TABLE folders_v2 RENAME TO folders`,
   ]);
+  // Older versions recorded this normal out-of-scope condition as an error.
+  // Preserve successful exports, other failures and all project/chat state.
+  db.prepare("DELETE FROM exports WHERE path IS NULL AND error=?").run(
+    UNREGISTERED_CHAT_FOLDER_ERROR,
+  );
   type AgentsSettings = {
     agents_auto_create: boolean;
     agents_project_template: string;
@@ -1856,8 +1871,7 @@ export default async function plugin(bb: BbPluginApi) {
       (atProject
         ? root
         : sectionForMatches(foldersAt(env.hostId, env.path ?? "", t.projectId)));
-    if (!f)
-      throw new Error("The chat working folder is not registered in the tree.");
+    if (!f) throw new UnregisteredChatFolderError();
     return { t, f };
   }
   /**
@@ -2025,7 +2039,11 @@ export default async function plugin(bb: BbPluginApi) {
         const message = String(e);
         // Deleted chats can never export again; a missing environment is a
         // transient state of chats that never ran. Neither is worth keeping.
-        if (/not.found|http 404/i.test(message))
+        if (e instanceof UnregisteredChatFolderError)
+          db.prepare(
+            "DELETE FROM exports WHERE threadId=? AND path IS NULL AND error=?",
+          ).run(threadId, UNREGISTERED_CHAT_FOLDER_ERROR);
+        else if (/not.found|http 404/i.test(message))
           db.prepare("DELETE FROM exports WHERE threadId=?").run(threadId);
         else if (!/environment/i.test(message))
           db.prepare("INSERT OR REPLACE INTO exports VALUES (?,NULL,?,?)").run(
@@ -3625,6 +3643,7 @@ export default async function plugin(bb: BbPluginApi) {
           throw new Error("Chat export is waiting for a move or archive.");
         changed();
       } catch (error) {
+        if (error instanceof UnregisteredChatFolderError) return;
         if (
           /not.found|http 404|environment|not registered in the tree/i.test(
             String(error),

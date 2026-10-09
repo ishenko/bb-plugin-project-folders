@@ -133,7 +133,9 @@ describe("full backup export and import", () => {
       const exported = parseBackup(await call("backup_export", null));
       expect(exported.kind).toBe(BACKUP_KIND);
       expect(exported.version).toBe(1);
-      expect(exported.pluginVersion).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(exported.pluginVersion).toMatch(
+        /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/,
+      );
       expect(exported.settings).toEqual({});
       for (const table of DURABLE_TABLES)
         expect(exported.tables[table].length).toBeGreaterThan(0);

@@ -120,9 +120,29 @@
   flex: none;
 }
 .pf-status {
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
-  width: 8px;
+  width: 14px;
+  height: 14px;
+}
+.pf-thread a .pf-status svg {
+  width: 14px;
+  height: 14px;
+}
+.pf-status-spinner {
+  animation: pf-status-spin 1s linear infinite;
+}
+@keyframes pf-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-status-spinner {
+    animation: none;
+  }
 }
 .pf-unread {
   font-weight: 650;

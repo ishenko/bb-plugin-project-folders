@@ -36,7 +36,8 @@ export const CLI_AGENTS_PLUGIN_ID = "cli-agents";
 export const CLI_AGENTS_URL = "https://github.com/VKirill/bb-plugin-cli-agents";
 
 export type ReasoningLevel = (typeof REASONING_LEVELS)[number];
-export type ServiceTier = (typeof SERVICE_TIERS)[number];
+export type ServiceTier = string;
+const serviceTierSchema = z.string().min(1).max(100);
 export type PermissionMode = (typeof PERMISSION_MODES)[number];
 export type EnvironmentMode = (typeof ENVIRONMENT_MODES)[number];
 
@@ -48,7 +49,7 @@ export const executionSchema = z.object({
   providerId: z.string().min(1).max(100).optional(),
   model: z.string().min(1).max(200).optional(),
   reasoningLevel: z.enum(REASONING_LEVELS).optional(),
-  serviceTier: z.enum(SERVICE_TIERS).optional(),
+  serviceTier: serviceTierSchema.optional(),
   permissionMode: z.enum(PERMISSION_MODES).optional(),
   /**
    * Absent means "leave the environment alone": the chat still starts in this
@@ -80,7 +81,7 @@ export const modelPinSchema = z.object({
   providerId: z.string(),
   model: z.string(),
   reasoningLevel: z.enum(REASONING_LEVELS).nullable(),
-  serviceTier: z.enum(SERVICE_TIERS).nullable(),
+  serviceTier: serviceTierSchema.nullable(),
 });
 export type ModelPin = z.infer<typeof modelPinSchema>;
 
@@ -190,7 +191,7 @@ export const executionFallbackSchema = z.object({
   providerId: z.string(),
   model: z.string(),
   reasoningLevel: z.enum(REASONING_LEVELS).nullable(),
-  serviceTier: z.enum(SERVICE_TIERS).nullable(),
+  serviceTier: serviceTierSchema.nullable(),
   permissionMode: z.enum(PERMISSION_MODES).nullable(),
 });
 export type ExecutionFallback = z.infer<typeof executionFallbackSchema>;
