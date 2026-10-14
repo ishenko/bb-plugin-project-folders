@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
-import { useSdk } from "@get-bb/plugin-sdk/app";
+import { useEffect, useRef, useState } from "react";
+import { experimental_Icon as BbIcon, useSdk } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import { t } from "./i18n";
-import { Button } from "./components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./components/ui/dialog";
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from "./components/ui/dropdown-menu";
+import { useIsCompactViewport } from "./components/ui/hooks/use-compact-viewport";
 
 const pluginId = "push-notifications";
 const levelSchema = z.enum(["all", "input-only", "muted"]);
@@ -41,37 +41,46 @@ const label = (level: Own) =>
     muted: t("Без уведомлений"),
   })[level];
 
-export function ThreadNotificationsDialog({
+export function ThreadNotificationsMenu({
   threadId,
-  title,
   parentThreadId,
+  open,
+  compactStep,
+  onStepChange,
   onClose,
 }: {
   threadId: string;
-  title: string;
   parentThreadId: string | null;
+  open: boolean;
+  compactStep: boolean;
+  onStepChange(open: boolean): void;
   onClose(): void;
 }) {
   const sdk = useSdk();
+  const compact = useIsCompactViewport();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const [draft, setDraft] = useState<Own>("inherit");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const pending = useRef(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    if (!open) return;
     const controller = new AbortController();
     setLoaded(null);
     setError("");
-    void Promise.all([
-      sdk.plugins.callRpc({
-        pluginId,
-        method: "threadNotifications.list",
-        input: { threadIds: [threadId] },
-        outputSchema: listSchema,
-        signal: controller.signal,
-      }),
-      sdk.plugins.getSettings({ pluginId, signal: controller.signal }),
-    ])
+    void Promise.resolve()
+      .then(() =>
+        Promise.all([
+          sdk.plugins.callRpc({
+            pluginId,
+            method: "threadNotifications.list",
+            input: { threadIds: [threadId] },
+            outputSchema: listSchema,
+            signal: controller.signal,
+          }),
+          sdk.plugins.getSettings({ pluginId, signal: controller.signal }),
+        ]),
+      )
       .then(([result, settings]) => {
         if (controller.signal.aborted) return;
         const inputs = result.threads[threadId] ?? {
@@ -80,101 +89,177 @@ export function ThreadNotificationsDialog({
         };
         const defaults = defaultsSchema.parse(settings.values);
         setLoaded({ inputs, defaults });
-        setDraft(inputs.own);
       })
       .catch((e) => {
         if (!controller.signal.aborted) setError(String(e));
       });
     return () => controller.abort();
-  }, [sdk, threadId, attempt]);
+  }, [sdk, threadId, open, attempt]);
 
   const fallback = loaded
     ? parentThreadId !== null && loaded.defaults.childLevel !== "inherit"
       ? loaded.defaults.childLevel
       : loaded.defaults.defaultLevel
     : null;
-  const base = draft === "inherit" ? fallback : draft;
+  const base = loaded?.inputs.own === "inherit" ? fallback : loaded?.inputs.own;
   const cap = loaded?.inputs.ancestorCap;
-  const limited = base !== null && cap && rank[cap.level] < rank[base];
+  const limited = base != null && cap && rank[cap.level] < rank[base];
   const effective = limited ? cap.level : base;
-  async function save() {
-    if (!loaded || saving) return;
+  const detail = effective
+    ? label(effective)
+    : error
+      ? t("Повторить")
+      : t("Загрузка…");
+  async function save(level: Own) {
+    if (!loaded || pending.current) return;
+    pending.current = true;
     setSaving(true);
     setError("");
     try {
-      await sdk.plugins.callRpc({
+      const inputs = await sdk.plugins.callRpc({
         pluginId,
         method: "threadNotifications.set",
-        input: { threadId, level: draft },
+        input: { threadId, level },
         outputSchema: inputsSchema,
       });
+      setLoaded({ ...loaded, inputs });
       onClose();
     } catch (e) {
       setError(String(e));
     } finally {
+      pending.current = false;
       setSaving(false);
     }
   }
-  return (
-    <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{t("Уведомления")}</DialogTitle>
-          <DialogDescription>{title}</DialogDescription>
-        </DialogHeader>
-        {!loaded && !error && <p role="status">{t("Загрузка…")}</p>}
-        {loaded && (
-          <fieldset className="grid gap-2" disabled={saving}>
-            <legend className="sr-only">{t("Уведомления")}</legend>
-            {ownSchema.options.map((level) => (
-              <label
-                key={level}
-                className="flex items-center gap-2 py-1 text-sm"
-              >
-                <input
-                  type="radio"
-                  name={`notifications-${threadId}`}
-                  value={level}
-                  checked={draft === level}
-                  onChange={() => setDraft(level)}
-                />
-                {label(level)}
-                {level === "inherit" && fallback && ` (${label(fallback)})`}
-              </label>
-            ))}
-          </fieldset>
-        )}
-        {limited && effective && (
-          <p role="status" className="text-sm text-muted-foreground">
+  const summary = (
+    <>
+      <BbIcon
+        name={
+          effective === "muted"
+            ? "push-notifications/off"
+            : effective === "all"
+              ? "push-notifications/ringing"
+              : "BellDot"
+        }
+        fallback="BellDot"
+        className="size-4 shrink-0"
+        aria-hidden="true"
+      />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span>{t("Уведомления")}</span>
+        <span className="truncate text-2xs text-muted-foreground">
+          {detail}
+        </span>
+      </span>
+    </>
+  );
+  const choices = (
+    <>
+      {ownSchema.options.map((level) => (
+        <DropdownMenuItem
+          key={level}
+          role={compact ? "menuitemradio" : "menuitem"}
+          aria-checked={compact ? loaded?.inputs.own === level : undefined}
+          aria-current={loaded?.inputs.own === level ? "true" : undefined}
+          className="flex items-center justify-between gap-3"
+          disabled={!loaded || saving}
+          onSelect={(event) => {
+            event.preventDefault();
+            void save(level);
+          }}
+        >
+          <span className="min-w-0 flex-1 truncate">
+            {label(level)}
+            {level === "inherit" && fallback && ` (${label(fallback)})`}
+          </span>
+          {loaded?.inputs.own === level && (
+            <BbIcon
+              name="Check"
+              className="ml-auto size-4 shrink-0"
+              aria-hidden="true"
+            />
+          )}
+        </DropdownMenuItem>
+      ))}
+      {limited && (
+        <>
+          <DropdownMenuSeparator />
+          <div className="max-w-56 px-2 py-1 text-xs text-muted-foreground">
             {cap.threadId === parentThreadId
               ? t("Ограничено родительским тредом")
               : t("Ограничено вышестоящим тредом")}
-            {": "}
-            {label(effective)}
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-sm text-destructive break-words">
-            {error}
-          </p>
-        )}
-        <DialogFooter>
-          {!loaded && error && (
-            <Button variant="outline" onClick={() => setAttempt((n) => n + 1)}>
-              {t("Повторить")}
-            </Button>
-          )}
-          <Button variant="outline" disabled={saving} onClick={onClose}>
-            {t("Отмена")}
-          </Button>
-          <Button
-            disabled={!loaded || saving || draft === loaded.inputs.own}
-            onClick={() => void save()}
+          </div>
+        </>
+      )}
+      {saving && (
+        <div role="status" className="px-2 py-1 text-xs text-muted-foreground">
+          {t("Сохраняю…")}
+        </div>
+      )}
+      {error && (
+        <>
+          <DropdownMenuSeparator />
+          <div
+            role="alert"
+            className="max-w-56 break-words px-2 py-1 text-xs text-destructive"
           >
-            {saving ? t("Сохраняю…") : t("Сохранить")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {error}
+          </div>
+          {!loaded && (
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                setAttempt((n) => n + 1);
+              }}
+            >
+              {t("Повторить")}
+            </DropdownMenuItem>
+          )}
+        </>
+      )}
+    </>
+  );
+  if (compact) {
+    return compactStep ? (
+      <>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            onStepChange(false);
+          }}
+        >
+          <BbIcon name="ChevronLeft" className="size-4" aria-hidden="true" />
+          {t("Назад")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>{t("Уведомления")}</DropdownMenuLabel>
+        {choices}
+      </>
+    ) : (
+      <DropdownMenuItem
+        aria-label={`${t("Уведомления")} ${detail}`}
+        onSelect={(event) => {
+          event.preventDefault();
+          onStepChange(true);
+        }}
+      >
+        {summary}
+        <BbIcon
+          name="ChevronRight"
+          className="ml-auto size-4"
+          aria-hidden="true"
+        />
+      </DropdownMenuItem>
+    );
+  }
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger aria-label={`${t("Уведомления")} ${detail}`}>
+        {summary}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="max-h-[min(24rem,calc(100vh-2rem))] min-w-44 overflow-y-auto">
+        {choices}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }

@@ -31,7 +31,7 @@ The plugin replaces a flat thread listing with project/section rows and per-plac
 
 ## Modes
 
-The chat's ellipsis and right-click menus include **Notifications**. The dialog offers Default, All activity, Needs input only and Muted, reading and saving the same per-thread preferences as BB's own thread menu through the built-in `push-notifications` plugin. Default shows the global or child-thread fallback; parent and ancestor caps are shown when they limit the selected mode. Settings load only when the dialog opens. Cancel does not write anything; failed reads and saves stay visible and can be retried. The dialog also works from the compact actions drawer (`thread-notifications.tsx`).
+The chat's ellipsis and right-click menus include **Notifications**, with the effective mode on a muted second line and the same mode-specific icons as BB's thread menu. On desktop its submenu offers Default, All activity, Needs input only and Muted, with a checkmark for the saved choice; compact layouts use a choice step with Back in the existing actions drawer. A choice applies immediately without a separate dialog or Save button. The control reads and writes the built-in `push-notifications` preferences; Default shows the global or child-thread fallback, and limiting parent/ancestor caps are shown below the choices. Settings load when the actions menu opens, not once per sidebar row. Dismissing the menu writes nothing, and failed reads/saves remain retryable (`thread-notifications.tsx`).
 
 | Setting | Values | Effect |
 |---|---|---|

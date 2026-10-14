@@ -1,7 +1,7 @@
 import { FolderBrowser } from "./folder-browser";
 import { ThreadSectionLabel } from "./thread-section-label";
 import { ThreadStatus } from "./thread-status";
-import { ThreadNotificationsDialog } from "./thread-notifications";
+import { ThreadNotificationsMenu } from "./thread-notifications";
 import {
   MoveDialog,
   PendingMoves,
@@ -1850,7 +1850,13 @@ function ThreadRow({
           {renameError}
         </span>
       )}
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+      <DropdownMenu
+        open={menuOpen}
+        onOpenChange={(open) => {
+          setMenuOpen(open);
+          if (!open) setNotificationsOpen(false);
+        }}
+      >
         <DropdownMenuTrigger asChild>
           <button className="pf-icon" aria-label={t("Действия чата")}>
             <Icon name="MoreHorizontal" />
@@ -1865,111 +1871,120 @@ function ThreadRow({
             }
           }}
         >
-          <DropdownMenuItem onSelect={beginRename}>
-            <Icon name="Pencil" />
-            {t("Переименовать")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => void a.setPinned(thread.id, !thread.isPinned)}
-          >
-            <Icon name="Pin" />
-            {thread.isPinned ? t("Открепить") : t("Закрепить")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => void a.setRead(thread.id, thread.isUnread)}
-          >
-            <Icon name="Check" />
-            {thread.isUnread
-              ? t("Отметить прочитанным")
-              : t("Отметить непрочитанным")}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onMove(thread)}>
-            <Icon name="Folder" />
-            {t("Переместить в подраздел…")}
-          </DropdownMenuItem>
-          {compact || labels.tags.length === 0 ? (
-            <DropdownMenuItem
-              onSelect={() =>
-                labels.tags.length === 0 ? manageLabels() : setPicking(true)
-              }
-            >
-              <Icon name="Tag" />
-              {labels.tags.length === 0 ? t("Создать метку…") : t("Метка")}
-              {tag && (
-                <span className="pf-tag-menu-current">
-                  <TagChip tag={tag} />
-                </span>
-              )}
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Icon name="Tag" />
-                {t("Метка")}
-                {tag && (
-                  <span className="pf-tag-menu-current">
-                    <TagChip tag={tag} />
-                  </span>
-                )}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="pf-tag-submenu">
-                <DropdownMenuRadioGroup
-                  value={tag?.id ?? ""}
-                  onValueChange={(id) =>
-                    void labels
-                      .setThreadTag(thread.id, id || null)
-                      .catch((e) => setRenameError(String(e)))
+          {!(compact && notificationsOpen) && (
+            <>
+              <DropdownMenuItem onSelect={beginRename}>
+                <Icon name="Pencil" />
+                {t("Переименовать")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => void a.setPinned(thread.id, !thread.isPinned)}
+              >
+                <Icon name="Pin" />
+                {thread.isPinned ? t("Открепить") : t("Закрепить")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => void a.setRead(thread.id, thread.isUnread)}
+              >
+                <Icon name="Check" />
+                {thread.isUnread
+                  ? t("Отметить прочитанным")
+                  : t("Отметить непрочитанным")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onMove(thread)}>
+                <Icon name="Folder" />
+                {t("Переместить в подраздел…")}
+              </DropdownMenuItem>
+              {compact || labels.tags.length === 0 ? (
+                <DropdownMenuItem
+                  onSelect={() =>
+                    labels.tags.length === 0 ? manageLabels() : setPicking(true)
                   }
                 >
-                  <DropdownMenuRadioItem value="">
-                    <span className="pf-tag-option-none">{t("Без метки")}</span>
-                  </DropdownMenuRadioItem>
-                  {labels.tags.map((x) => (
-                    <DropdownMenuRadioItem key={x.id} value={x.id}>
-                      <TagChip tag={x} />
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={manageLabels}>
-                  <Icon name="Settings" />
-                  {t("Настроить метки…")}
+                  <Icon name="Tag" />
+                  {labels.tags.length === 0 ? t("Создать метку…") : t("Метка")}
+                  {tag && (
+                    <span className="pf-tag-menu-current">
+                      <TagChip tag={tag} />
+                    </span>
+                  )}
                 </DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+              ) : (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Icon name="Tag" />
+                    {t("Метка")}
+                    {tag && (
+                      <span className="pf-tag-menu-current">
+                        <TagChip tag={tag} />
+                      </span>
+                    )}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="pf-tag-submenu">
+                    <DropdownMenuRadioGroup
+                      value={tag?.id ?? ""}
+                      onValueChange={(id) =>
+                        void labels
+                          .setThreadTag(thread.id, id || null)
+                          .catch((e) => setRenameError(String(e)))
+                      }
+                    >
+                      <DropdownMenuRadioItem value="">
+                        <span className="pf-tag-option-none">
+                          {t("Без метки")}
+                        </span>
+                      </DropdownMenuRadioItem>
+                      {labels.tags.map((x) => (
+                        <DropdownMenuRadioItem key={x.id} value={x.id}>
+                          <TagChip tag={x} />
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={manageLabels}>
+                      <Icon name="Settings" />
+                      {t("Настроить метки…")}
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+              {onUnplace && (
+                <DropdownMenuItem onSelect={onUnplace}>
+                  <Icon name="FolderSync" />
+                  {t("Вернуть в рабочую папку")}
+                </DropdownMenuItem>
+              )}
+            </>
           )}
-          {onUnplace && (
-            <DropdownMenuItem onSelect={onUnplace}>
-              <Icon name="FolderSync" />
-              {t("Вернуть в рабочую папку")}
-            </DropdownMenuItem>
+          <ThreadNotificationsMenu
+            threadId={thread.id}
+            parentThreadId={thread.parentThreadId}
+            open={menuOpen}
+            compactStep={notificationsOpen}
+            onStepChange={setNotificationsOpen}
+            onClose={() => {
+              setMenuOpen(false);
+              setNotificationsOpen(false);
+            }}
+          />
+          {!(compact && notificationsOpen) && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => a.archive(thread.id)}>
+                <Icon name="Archive" />
+                {t("В архив")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => a.requestDelete(thread.id)}
+              >
+                <Icon name="Trash2" />
+                {t("Удалить…")}
+              </DropdownMenuItem>
+            </>
           )}
-          <DropdownMenuItem onSelect={() => setNotificationsOpen(true)}>
-            <Icon name="BellDot" />
-            {t("Уведомления")}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => a.archive(thread.id)}>
-            <Icon name="Archive" />
-            {t("В архив")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            variant="destructive"
-            onSelect={() => a.requestDelete(thread.id)}
-          >
-            <Icon name="Trash2" />
-            {t("Удалить…")}
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {notificationsOpen && (
-        <ThreadNotificationsDialog
-          threadId={thread.id}
-          title={thread.title || thread.titleFallback || ""}
-          parentThreadId={thread.parentThreadId}
-          onClose={() => setNotificationsOpen(false)}
-        />
-      )}
       {picking && (
         <TagPicker
           threadId={thread.id}
