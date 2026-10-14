@@ -4,7 +4,11 @@ import { t } from "./i18n";
 
 type StatusThread = Pick<
   PluginSidebarThread,
-  "indicator" | "indicatorLabel" | "hasPendingInteraction" | "isUnread"
+  | "indicator"
+  | "indicatorLabel"
+  | "hasPendingInteraction"
+  | "isUnread"
+  | "isPinned"
 > & {
   // Newer hosts expose these refinements; older hosts supply the indicator.
   status?: string;
@@ -53,11 +57,13 @@ export function ThreadStatus({ thread }: { thread: StatusThread }) {
         ? "Spinner"
         : state === "error"
           ? "AlertCircle"
-          : state === "idle"
-            ? "Circle"
-            : state === "done"
-              ? "CircleCheck"
-              : null;
+          : state === "done"
+            ? "CircleCheck"
+            : thread.isPinned
+              ? "Pin"
+              : state === "idle"
+                ? "Circle"
+                : null;
 
   return (
     <span
@@ -65,10 +71,12 @@ export function ThreadStatus({ thread }: { thread: StatusThread }) {
       role={icon ? "img" : undefined}
       aria-hidden={icon ? undefined : true}
       aria-label={
-        icon
-          ? (thread.indicatorLabel ??
-            (state === "done" ? t("Готово") : undefined))
-          : undefined
+        icon === "Pin"
+          ? t("Закрепить")
+          : icon
+            ? (thread.indicatorLabel ??
+              (state === "done" ? t("Готово") : undefined))
+            : undefined
       }
       data-thread-status={state}
     >

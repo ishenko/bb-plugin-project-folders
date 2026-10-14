@@ -59,12 +59,12 @@ const root = {
   name: "Project",
 };
 const folder = { ...root, id: "f1", path: "/work/Section", name: "Section" };
-function mount(failMove = false) {
+function mount(failMove = false, sidebarThread = thread) {
   return renderSlot(
     app.threadLists[0]!,
     { activeThreadId: null, onNavigate() {} },
     {
-      sidebarThreads: { threads: [thread], projects: [] },
+      sidebarThreads: { threads: [sidebarThread], projects: [] },
       rpc: {
         list: () => ({
           folders: [folder],
@@ -84,6 +84,22 @@ function mount(failMove = false) {
     },
   );
 }
+it.each<[Partial<PluginSidebarThread>, string]>([
+  [{}, "Pin"],
+  [{ indicator: "runtime" }, "Spinner"],
+  [{ isUnread: true }, "CircleCheck"],
+  [{ indicator: "unread-error" }, "AlertCircle"],
+])(
+  "renders a single pinned-thread status icon (%j -> %s)",
+  async (overrides, icon) => {
+    const view = mount(false, { ...thread, ...overrides, isPinned: true });
+    const label = await view.findByText("Example chat");
+    const link = label.closest("a")!;
+    expect(link.querySelectorAll("[data-icon]")).toHaveLength(1);
+    expect(link.querySelector(`.pf-status [data-icon="${icon}"]`)).not.toBeNull();
+    view.lifecycle.unmount();
+  },
+);
 it("exposes the thread ID to both the link and the actions trigger", async () => {
   const view = mount();
   const label = await view.findByText("Example chat");

@@ -1823,7 +1823,6 @@ function ThreadRow({
           title={thread.indicatorLabel ?? undefined}
         >
           <ThreadStatus thread={thread} />
-          {thread.isPinned && <Icon name="Pin" />}
           <span
             onDoubleClick={(event) => {
               event.preventDefault();
