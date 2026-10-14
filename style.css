@@ -2085,12 +2085,17 @@
   font-weight: 500;
   color: var(--muted-foreground);
 }
+/* All 13 swatches (12 colors + custom) on one row; they shrink to fit. */
 .pf-tag-editor .pf-swatches {
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+  gap: clamp(3px, 1.2vw, 8px);
 }
 .pf-tag-editor .pf-swatch {
-  width: 28px;
-  height: 28px;
+  width: 100%;
+  max-width: 28px;
+  height: auto;
+  aspect-ratio: 1;
 }
 .pf-tag-warning {
   margin: 0;

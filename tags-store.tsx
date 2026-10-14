@@ -83,7 +83,13 @@ export function useTags() {
   useRealtime("tags", () => void load(rpc));
   const saveTag = useCallback(
     async (tag: { id?: string; name: string; color: string }) => {
-      const saved = await rpc.call("tag_save", tag);
+      // RPC input must be plain JSON: a new label has no id at all, not `undefined`.
+      const saved = await rpc.call(
+        "tag_save",
+        tag.id
+          ? { id: tag.id, name: tag.name, color: tag.color }
+          : { name: tag.name, color: tag.color },
+      );
       const exists = state.tags.some((t) => t.id === saved.id);
       set({
         ...state,

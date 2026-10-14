@@ -206,3 +206,38 @@ it("edits a label in its own dialog from the settings list", async () => {
   );
   view.lifecycle.unmount();
 });
+
+it("creates a new label from settings without sending an empty id", async () => {
+  let saved: unknown = null;
+  const view = renderSlot(
+    app.navPanels[0]!,
+    { subPath: "settings/tags" },
+    {
+      rpc: {
+        list: () => ({
+          folders: [],
+          roots: [],
+          bindings: {},
+          places: {},
+          errors: [],
+          machines: [],
+        }),
+        tags_get: () => ({ tags: [], assignments: {} }),
+        tag_save: (input: Record<string, unknown>) => {
+          saved = input;
+          return { id: "n1", name: input.name, color: input.color };
+        },
+      },
+    },
+  );
+  fireEvent.click(await view.findByRole("button", { name: /Add label/ }));
+  fireEvent.change(
+    await view.findByRole("textbox", { name: "Label name" }),
+    { target: { value: "Ops" } },
+  );
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(saved).not.toBeNull());
+  expect(Object.keys(saved as object).sort()).toEqual(["color", "name"]);
+  expect(await view.findByText("Ops")).toBeTruthy();
+  view.lifecycle.unmount();
+});
