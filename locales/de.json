@@ -406,5 +406,9 @@
   "Меток пока нет.": "Noch keine Labels.",
   "Без метки": "Kein Label",
   "Настроить метки…": "Labels verwalten…",
-  "Создать метку…": "Label erstellen…"
+  "Создать метку…": "Label erstellen…",
+  "Изменить метку": "Label bearbeiten",
+  "Новая метка": "Neues Label",
+  "Да, удалить": "Ja, löschen",
+  "Действия": "Aktionen"
 }

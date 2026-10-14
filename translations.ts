@@ -522,4 +522,8 @@ export const english = {
   "Без метки": "No label",
   "Настроить метки…": "Manage labels…",
   "Создать метку…": "Create a label…",
+  "Изменить метку": "Edit label",
+  "Новая метка": "New label",
+  "Да, удалить": "Yes, delete",
+  "Действия": "Actions",
 } as const;

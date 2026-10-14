@@ -3,13 +3,14 @@ import { beforeAll, afterEach, expect, it } from "vitest";
 import { fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { installTestMatchMedia } from "./test-match-media";
+import { installTestMatchMedia, setCompactViewport } from "./test-match-media";
 let app: Awaited<ReturnType<typeof loadPluginApp>>;
 beforeAll(async () => {
   installTestMatchMedia();
   app = await loadPluginApp(() => import("./app"));
 });
 afterEach(() => {
+  setCompactViewport(false);
   cleanup();
   localStorage.clear();
 });
@@ -132,5 +133,76 @@ it("loads labels once for many chat rows and once per change", async () => {
   await waitFor(() => expect(loads()).toBeGreaterThan(before));
   await new Promise((r) => setTimeout(r, 50));
   expect(loads() - before).toBeLessThanOrEqual(2);
+  view.lifecycle.unmount();
+});
+
+it("on phones picks the label in its own sheet instead of a long submenu", async () => {
+  setCompactViewport(true);
+  const view = renderSlot(
+    app.threadLists[0]!,
+    { activeThreadId: null, onNavigate() {} },
+    {
+      sidebarThreads: { threads: [thread], projects: [] },
+      rpc: {
+        list: () => ({ folders: [], roots: [root], bindings: {}, errors: [] }),
+        tags_get: () => ({ tags, assignments: {} }),
+        thread_tag_set: () => ({ ok: true }),
+      },
+    },
+  );
+  fireEvent.click(
+    await view.findByRole("button", { name: "Chat actions" }),
+  );
+  // The chat menu stays short: one «Label» row, no label list inside it.
+  expect(view.queryByRole("menuitemradio", { name: /Idea/ })).toBeNull();
+  fireEvent.click(await view.findByRole("menuitem", { name: /^Label/ }));
+  fireEvent.click(await view.findByRole("radio", { name: /Idea/ }));
+  await waitFor(() =>
+    expect(
+      view.inspection.rpcCalls.some(
+        (c) =>
+          c.method === "thread_tag_set" &&
+          JSON.stringify(c).includes('"tagId":"idea"'),
+      ),
+    ).toBe(true),
+  );
+  await waitFor(() => expect(view.queryByRole("radio")).toBeNull());
+  view.lifecycle.unmount();
+});
+
+it("edits a label in its own dialog from the settings list", async () => {
+  let saved: unknown = null;
+  const view = renderSlot(
+    app.navPanels[0]!,
+    { subPath: "settings/tags" },
+    {
+      rpc: {
+        list: () => ({
+          folders: [],
+          roots: [],
+          bindings: {},
+          places: {},
+          errors: [],
+          machines: [],
+        }),
+        tags_get: () => ({ tags, assignments: { t1: "bug" } }),
+        tag_save: (input: { id?: string; name: string; color: string }) => {
+          saved = input;
+          return { id: input.id ?? "new", name: input.name, color: input.color };
+        },
+      },
+    },
+  );
+  fireEvent.click(await view.findByRole("button", { name: /^Bug/ }));
+  const name = await view.findByRole("textbox", { name: "Label name" });
+  fireEvent.change(name, { target: { value: "Bugfix" } });
+  fireEvent.click(view.getByRole("radio", { name: "blue" }));
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(saved).toEqual({ id: "bug", name: "Bugfix", color: "blue" }),
+  );
+  await waitFor(() =>
+    expect(view.queryByRole("textbox", { name: "Label name" })).toBeNull(),
+  );
   view.lifecycle.unmount();
 });

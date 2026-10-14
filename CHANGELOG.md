@@ -2,8 +2,8 @@
 
 ## 0.6.30-igor.2 — Chat labels (personal fork)
 
-- New **Chat labels** section in plugin settings: add labels with a name and a color (palette or custom), rename, reorder and delete them.
-- Chat menu ⋯ (and right-click) has a **Label** submenu: pick one label per chat or **No label**; **Manage labels…** opens the settings.
+- New **Chat labels** section in plugin settings: a compact list of labels; tapping one opens an editor (name, color, live chip preview, delete). Reorder from each label's ⋯ menu.
+- Chat menu ⋯ (and right-click) has a **Label** entry showing the current label: on desktop a submenu of chips, on phones a separate sheet with large touch rows, so the chat menu stays short. **Manage labels…** opens the settings.
 - A labelled chat shows a compact colored chip after its title.
 - Stored on the BB server (`thread_tags`, `thread_tag_assignments`), shared by every device, and included in the full backup; older backups still import.
 

@@ -406,5 +406,9 @@
   "Меток пока нет.": "Aucune étiquette pour l’instant.",
   "Без метки": "Sans étiquette",
   "Настроить метки…": "Gérer les étiquettes…",
-  "Создать метку…": "Créer une étiquette…"
+  "Создать метку…": "Créer une étiquette…",
+  "Изменить метку": "Modifier l’étiquette",
+  "Новая метка": "Nouvelle étiquette",
+  "Да, удалить": "Oui, supprimer",
+  "Действия": "Actions"
 }

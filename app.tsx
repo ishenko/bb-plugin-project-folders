@@ -101,7 +101,8 @@ import {
   DropdownMenuRadioItem,
 } from "./components/ui/dropdown-menu";
 import { useTags } from "./tags-store";
-import { TagChip, TagDot } from "./tags-ui";
+import { TagChip, TagPicker } from "./tags-ui";
+import { useIsCompactViewport } from "./components/ui/hooks/use-compact-viewport";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Icon } from "./components/ui/icon";
@@ -1715,6 +1716,13 @@ function ThreadRow({
   const nav = useBbNavigate();
   const labels = useTags();
   const tag = labels.tagOf(thread.id);
+  const compact = useIsCompactViewport();
+  const [picking, setPicking] = useState(false);
+  const manageLabels = () => {
+    setPicking(false);
+    nav.toPluginPanel("folders", { subPath: "settings/tags" });
+    onNavigate();
+  };
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -1877,48 +1885,57 @@ function ThreadRow({
             <Icon name="Folder" />
             {t("Переместить в подраздел…")}
           </DropdownMenuItem>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
+          {compact || labels.tags.length === 0 ? (
+            <DropdownMenuItem
+              onSelect={() =>
+                labels.tags.length === 0 ? manageLabels() : setPicking(true)
+              }
+            >
               <Icon name="Tag" />
-              {t("Метка")}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {labels.tags.length > 0 && (
-                <>
-                  <DropdownMenuRadioGroup
-                    value={tag?.id ?? ""}
-                    onValueChange={(id) =>
-                      void labels
-                        .setThreadTag(thread.id, id || null)
-                        .catch((e) => setRenameError(String(e)))
-                    }
-                  >
-                    <DropdownMenuRadioItem value="">
-                      {t("Без метки")}
-                    </DropdownMenuRadioItem>
-                    {labels.tags.map((x) => (
-                      <DropdownMenuRadioItem key={x.id} value={x.id}>
-                        <TagDot color={x.color} />
-                        <span className="pf-tag-menu-name">{x.name}</span>
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                  <DropdownMenuSeparator />
-                </>
+              {labels.tags.length === 0 ? t("Создать метку…") : t("Метка")}
+              {tag && (
+                <span className="pf-tag-menu-current">
+                  <TagChip tag={tag} />
+                </span>
               )}
-              <DropdownMenuItem
-                onSelect={() => {
-                  nav.toPluginPanel("folders", { subPath: "settings/tags" });
-                  onNavigate();
-                }}
-              >
-                <Icon name="Settings" />
-                {labels.tags.length > 0
-                  ? t("Настроить метки…")
-                  : t("Создать метку…")}
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Icon name="Tag" />
+                {t("Метка")}
+                {tag && (
+                  <span className="pf-tag-menu-current">
+                    <TagChip tag={tag} />
+                  </span>
+                )}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="pf-tag-submenu">
+                <DropdownMenuRadioGroup
+                  value={tag?.id ?? ""}
+                  onValueChange={(id) =>
+                    void labels
+                      .setThreadTag(thread.id, id || null)
+                      .catch((e) => setRenameError(String(e)))
+                  }
+                >
+                  <DropdownMenuRadioItem value="">
+                    <span className="pf-tag-option-none">{t("Без метки")}</span>
+                  </DropdownMenuRadioItem>
+                  {labels.tags.map((x) => (
+                    <DropdownMenuRadioItem key={x.id} value={x.id}>
+                      <TagChip tag={x} />
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={manageLabels}>
+                  <Icon name="Settings" />
+                  {t("Настроить метки…")}
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
           {onUnplace && (
             <DropdownMenuItem onSelect={onUnplace}>
               <Icon name="FolderSync" />
@@ -1939,6 +1956,14 @@ function ThreadRow({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {picking && (
+        <TagPicker
+          threadId={thread.id}
+          title={thread.title || thread.titleFallback || ""}
+          onManage={manageLabels}
+          onClose={() => setPicking(false)}
+        />
+      )}
     </div>
   );
 }
