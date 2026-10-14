@@ -3,7 +3,7 @@ import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { HubChatGroups, useHubSidebar } from "./hub-sidebar";
+import { HubChatGroups, useHubSidebar, type HubThreadDecoration } from "./hub-sidebar";
 import { hubChatTree, type HubSidebar, type HubChatNode } from "./hub-sidebar-contract";
 import { installTestMatchMedia } from "./test-match-media";
 
@@ -26,37 +26,34 @@ let app: Awaited<ReturnType<typeof loadPluginApp>>;
 beforeAll(async () => { installTestMatchMedia(); app = await loadPluginApp(() => import("./app")); });
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 const ids = (nodes: HubChatNode[]): string[] => nodes.flatMap((node) => node.kind === "thread" ? [node.thread.id] : ids(node.children));
+const renderThread = (chat: PluginSidebarThread, decoration?: HubThreadDecoration) => <div key={chat.id}>{decoration?.leading}<span>{chat.title}</span></div>;
 
-it("embeds the full subtask count in the chevron button and keeps a working menu", async () => {
-  const slot = renderSlot({ component: HubChatGroups }, { threads: all, data, active: null, groupId: "p1", renderThread: (chat: PluginSidebarThread) => <span key={chat.id}>{chat.title}</span> });
+it("removes number indicators and keeps task-only ancestors distinct from actual chats", async () => {
+  const slot = renderSlot({ component: HubChatGroups }, { threads: all.slice(0, 2), data, active: null, groupId: "p1", renderThread });
   const heading = slot.container.querySelector(".pf-hub-chat-heading")!;
-  const count = heading.querySelector(".pf-hub-chat-count")!;
-  expect(count.textContent).toBe("6");
-  expect(count.getAttribute("aria-label")).toBe("Subtasks: 6");
-  const disclosure = count.closest("button")!;
+  const disclosure = heading.querySelector("button")!;
   expect(disclosure.getAttribute("aria-label")).toBe("Collapse TA-1");
-  expect(disclosure.getAttribute("data-counted")).toBe("true");
+  expect(slot.container.querySelector(".pf-hub-chat-count")).toBeNull();
+  expect(disclosure.hasAttribute("data-counted")).toBe(false);
   expect(disclosure.querySelector('[data-icon="ChevronDown"]')).not.toBeNull();
   expect(heading.firstElementChild).toBe(disclosure);
   fireEvent.click(disclosure);
   expect(disclosure.querySelector('[data-icon="ChevronRight"]')).not.toBeNull();
   fireEvent.click(disclosure);
   expect(slot.container.querySelector(".pf-hub-chat-state")).toBeNull();
-  const childHeading = slot.container.querySelector('[data-hub-issue-id="child"] .pf-hub-chat-heading')!;
-  expect(childHeading.querySelector(".pf-hub-chat-count")).toBeNull();
-  fireEvent.pointerDown(slot.getByRole("button", { name: "Task actions: TA-2" }), { button: 0, ctrlKey: false });
+  fireEvent.pointerDown(slot.getByRole("button", { name: "Task actions: TA-1" }), { button: 0, ctrlKey: false });
   const link = await slot.findByRole("menuitem", { name: "Open in Hub" });
-  expect(link.getAttribute("href")).toBe("/plugins/hub/hub/p/p1/issue/child");
-  fireEvent.click(slot.getByRole("menuitem", { name: "Expand chats" }));
-  expect(slot.getByText("Chat t1")).toBeTruthy();
+  expect(link.getAttribute("href")).toBe("/plugins/hub/hub/p/p1/issue/parent");
+  fireEvent.click(slot.getByRole("menuitem", { name: "Collapse chats" }));
+  expect(slot.queryByText("Chat t1")).toBeNull();
   slot.lifecycle.unmount();
 });
 
-it("keeps large counts compact inside the arrow with the exact count in the tooltip", () => {
+it("does not show counts even when Hub returns a large subtask count", () => {
   const many = { ...data, tasks: data.tasks.map((task) => ({ ...task, subtaskCount: 345 })) };
-  const slot = renderSlot({ component: HubChatGroups }, { threads: [thread("t3")], data: many, active: null, groupId: "p1", renderThread: (chat: PluginSidebarThread) => <span key={chat.id}>{chat.title}</span> });
-  expect(slot.getByText("99+").getAttribute("aria-label")).toBe("Subtasks: 345");
-  expect(slot.getByRole("button", { name: "Collapse TA-1" }).getAttribute("title")).toBe("Collapse TA-1 · Subtasks: 345");
+  const slot = renderSlot({ component: HubChatGroups }, { threads: [thread("t3")], data: many, active: null, groupId: "p1", renderThread });
+  expect(slot.queryByText("99+")).toBeNull();
+  expect(slot.getByRole("button", { name: "Collapse TA-1" }).getAttribute("title")).toBe("Collapse TA-1");
   slot.lifecycle.unmount();
 });
 
@@ -78,28 +75,30 @@ it("normalizes cycles and missing parents without losing chats", () => {
 });
 
 it("starts quiet subtask attempts collapsed, persists disclosure and keeps active chats open", async () => {
-  const props = { threads: all, data, active: null, groupId: "p1", renderThread: (chat: PluginSidebarThread) => <span key={chat.id}>{chat.title}</span> };
+  const props = { threads: all, data, active: null, groupId: "p1", renderThread };
   const slot = renderSlot({ component: HubChatGroups }, props);
-  expect(slot.queryByText("Chat t1")).toBeNull();
-  fireEvent.click(slot.getByRole("button", { name: "Expand TA-2" }));
   expect(slot.getByText("Chat t1")).toBeTruthy();
+  expect(slot.queryByText("Chat t2")).toBeNull();
+  fireEvent.click(slot.getByRole("button", { name: "Expand TA-2" }));
+  expect(slot.getByText("Chat t2")).toBeTruthy();
   fireEvent.click(slot.getByRole("button", { name: "Collapse TA-2" }));
   expect(JSON.parse(localStorage.getItem("project-folders:hub-chat-groups")!)["p1:child"]).toBe(true);
   slot.lifecycle.unmount();
   const active = renderSlot({ component: HubChatGroups }, { ...props, active: "t1" });
   expect(active.getByText("Chat t1")).toBeTruthy();
-  expect(active.getByRole("button", { name: "Collapse TA-2" }).hasAttribute("disabled")).toBe(true);
+  expect(active.getByRole("button", { name: "Expand TA-2" }).hasAttribute("disabled")).toBe(false);
+  expect(active.getByRole("button", { name: "Collapse TA-1" }).hasAttribute("disabled")).toBe(true);
   active.lifecycle.unmount();
 });
 
 it.each([{ isUnread: true }, { isPinned: true }, { hasPendingInteraction: true }, { status: "active" as const }])("auto expands important chat paths (%j)", (overrides) => {
-  const slot = renderSlot({ component: HubChatGroups }, { threads: [thread("t1", overrides)], data, active: null, groupId: "p1", renderThread: (chat: PluginSidebarThread) => <span key={chat.id}>{chat.title}</span> });
-  expect(slot.getByText("Chat t1")).toBeTruthy();
+  const slot = renderSlot({ component: HubChatGroups }, { threads: [thread("t1", overrides), thread("t2")], data, active: null, groupId: "p1", renderThread });
+  expect(slot.getByText("Chat t2")).toBeTruthy();
   slot.lifecycle.unmount();
 });
 
 it("disclosure in one section does not overwrite another section's preferences", () => {
-  const props = { threads: all, data, active: null, renderThread: (chat: PluginSidebarThread) => <span key={chat.id}>{chat.title}</span> };
+  const props = { threads: all, data, active: null, renderThread };
   const first = renderSlot({ component: HubChatGroups }, { ...props, groupId: "first" });
   const second = renderSlot({ component: HubChatGroups }, { ...props, groupId: "second" });
   fireEvent.click(first.container.querySelector('[aria-label="Expand TA-2"]')!);
@@ -154,7 +153,7 @@ it("Show all still reveals old worker attempts inside their task without duplica
     rpc: { list: () => ({ roots: [root], folders: [], bindings: {}, places: {}, errors: [] }) },
     sdk: { plugins: { callRpc: async () => data } },
   });
-  await slot.findByRole("link", { name: "TA-2 Child" });
+  await slot.findByRole("link", { name: "TA-1 Parent" });
   expect(slot.queryByText("Chat t2")).toBeNull();
   fireEvent.click(slot.getByRole("button", { name: "Show all (2)" }));
   await slot.findByText("Chat t2");
@@ -169,7 +168,7 @@ it("preserves sidebar navigation, menus and separate section placement", async (
     rpc: { list: () => ({ roots: [root], folders: [folder], bindings: {}, places: { t2: "f1" }, errors: [] }) },
     sdk: { plugins: { callRpc: async () => data } },
   });
-  expect(await slot.findAllByRole("link", { name: "TA-1 Parent" })).toHaveLength(2);
+  expect(await slot.findAllByRole("link", { name: "TA-1 Parent" })).toHaveLength(1);
   const t1 = slot.getByText("Chat t1").closest("[data-sidebar-thread-id]")!;
   expect(t1.getAttribute("data-sidebar-thread-id")).toBe("t1");
   fireEvent.click(slot.getByText("Chat t1"));
@@ -180,5 +179,59 @@ it("preserves sidebar navigation, menus and separate section placement", async (
   const section = slot.getByText("Section").closest(".pf-folder")!;
   await waitFor(() => expect(section.querySelector('[data-hub-issue-id="child"]')).not.toBeNull());
   expect(t1.closest(".pf-folder")).not.toBe(section);
+  slot.lifecycle.unmount();
+});
+
+it("restores every native action on the actual parent chat and never duplicates that chat", async () => {
+  const slot = renderSlot(app.threadLists[0]!, { activeThreadId: "t3", onNavigate() {} }, {
+    sidebarThreads: { threads: all, projects: [] },
+    rpc: { list: () => ({ roots: [root], folders: [], bindings: {}, places: {}, errors: [] }) },
+    sdk: { plugins: { callRpc: async () => data } },
+  });
+  await waitFor(() => expect(slot.container.querySelector('.pf-hub-chat-parent [data-sidebar-thread-id="t3"]')).not.toBeNull());
+  const parent = slot.getByText("Chat t3");
+  expect(slot.container.querySelectorAll('.pf-thread[data-sidebar-thread-id="t3"]')).toHaveLength(1);
+  fireEvent.click(slot.getByRole("button", { name: "Collapse TA-1" }));
+  expect(slot.getByText("Chat t3")).toBeTruthy();
+  expect(slot.queryByText("Chat t1")).toBeNull();
+  fireEvent.contextMenu(parent);
+  for (const name of ["Rename", "Pin", "Mark as unread", "Move to section…", "Archive", "Delete…", "Open in Hub"]) {
+    expect(await slot.findByRole("menuitem", { name })).toBeTruthy();
+  }
+  fireEvent.click(slot.getByRole("menuitem", { name: "Pin" }));
+  expect(slot.inspection.sidebarActionCalls).toContainEqual({ method: "setPinned", threadId: "t3", pinned: true });
+  fireEvent.contextMenu(parent);
+  fireEvent.click(await slot.findByRole("menuitem", { name: "Rename" }));
+  const input = await slot.findByRole("textbox", { name: "Rename" });
+  fireEvent.change(input, { target: { value: "Renamed parent" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  await waitFor(() => expect(slot.inspection.sidebarActionCalls).toContainEqual({ method: "rename", threadId: "t3", title: "Renamed parent" }));
+  slot.lifecycle.unmount();
+});
+
+it("promotes the selected direct worker while keeping other workers visible exactly once", async () => {
+  const slot = renderSlot(app.threadLists[0]!, { activeThreadId: "t2", onNavigate() {} }, {
+    sidebarThreads: { threads: all, projects: [] },
+    rpc: { list: () => ({ roots: [root], folders: [], bindings: {}, places: {}, errors: [] }) },
+    sdk: { plugins: { callRpc: async () => data } },
+  });
+  await waitFor(() => expect(slot.container.querySelector('[data-hub-issue-id="child"] .pf-hub-chat-parent .pf-thread')?.getAttribute("data-sidebar-thread-id")).toBe("t2"));
+  expect(slot.container.querySelectorAll('.pf-thread[data-sidebar-thread-id="t2"]')).toHaveLength(1);
+  expect(slot.getByText("Chat t1")).toBeTruthy();
+  slot.lifecycle.unmount();
+});
+
+it("retains a real parent chat as context even when the idle filter hides it", async () => {
+  const ago = Date.now() - 49 * 60 * 60 * 1000;
+  const oldParent = thread("t3", { createdAt: ago, updatedAt: ago, lastReadAt: ago, latestAttentionAt: ago });
+  const slot = renderSlot(app.threadLists[0]!, { activeThreadId: "t1", onNavigate() {} }, {
+    sidebarThreads: { threads: [thread("t1"), oldParent], projects: [] },
+    rpc: { list: () => ({ roots: [root], folders: [], bindings: {}, places: {}, errors: [] }) },
+    sdk: { plugins: { callRpc: async () => data } },
+  });
+  await waitFor(() => expect(slot.container.querySelector('[data-hub-issue-id="parent"] .pf-hub-chat-parent .pf-thread')?.getAttribute("data-sidebar-thread-id")).toBe("t3"));
+  expect(slot.container.querySelectorAll('.pf-thread[data-sidebar-thread-id="t3"]')).toHaveLength(1);
+  fireEvent.contextMenu(slot.getByText("Chat t3"));
+  expect(await slot.findByRole("menuitem", { name: "Delete…" })).toBeTruthy();
   slot.lifecycle.unmount();
 });

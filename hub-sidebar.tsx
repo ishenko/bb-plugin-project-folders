@@ -62,32 +62,51 @@ export function useHubSidebar(threads: readonly PluginSidebarThread[]) {
   return snapshot;
 }
 
-export function HubChatGroups({ threads, data, active, groupId, renderThread }: {
+export type HubThreadDecoration = { leading: ReactNode; menuItems: ReactNode; title: string };
+
+export function HubChatGroups({ threads, contextThreads = threads, data, active, groupId, renderThread }: {
   threads: readonly PluginSidebarThread[]; data: HubSidebar; active: string | null;
-  groupId: string; renderThread: (thread: PluginSidebarThread) => ReactNode;
+  contextThreads?: readonly PluginSidebarThread[];
+  groupId: string; renderThread: (thread: PluginSidebarThread, decoration?: HubThreadDecoration) => ReactNode;
 }) {
   const russian = useLanguage() === "ru";
   const [closed, setClosed] = useState(readClosedGroups);
+  const links = new Map(data.threads.map((link) => [link.threadId, link.issueId]));
+  const context = new Map<string, PluginSidebarThread[]>();
+  for (const thread of contextThreads) {
+    const issueId = links.get(thread.id);
+    if (!issueId || thread.originPluginId !== "hub" || thread.isArchived) continue;
+    const list = context.get(issueId) ?? [];
+    list.push(thread);
+    context.set(issueId, list);
+  }
   const render = (node: HubChatNode, depth: number): ReactNode => {
     if (node.kind === "thread") return renderThread(node.thread);
     const id = `${groupId}:${node.task.id}`;
-    const open = node.active || (closed[id] === undefined ? depth === 0 || node.important : !closed[id]);
+    const directThreads = node.children.filter((child): child is Extract<HubChatNode, { kind: "thread" }> => child.kind === "thread");
+    const candidates = (context.get(node.task.id) ?? []).filter((thread) => thread.projectId === node.task.projectId);
+    const parent = candidates.find((thread) => thread.id === active) ?? directThreads.find((child) => child.thread.id === active)?.thread ?? directThreads[0]?.thread ?? candidates[0];
+    const children = node.children.filter((child) => child.kind !== "thread" || child.thread.id !== parent?.id);
+    const keepOpen = node.active && parent?.id !== active;
+    const open = keepOpen || (closed[id] === undefined ? depth === 0 || node.important : !closed[id]);
     const label = `${node.task.key} ${node.task.title}`;
     const state = stateLabels[node.task.state][russian ? 1 : 0];
     const disclosure = `${open ? (russian ? "Свернуть" : "Collapse") : (russian ? "Раскрыть" : "Expand")} ${node.task.key}`;
     const href = `/plugins/hub/hub/p/${encodeURIComponent(node.task.projectId)}/issue/${encodeURIComponent(node.task.id)}`;
-    const subtasks = node.task.subtaskCount;
-    const countLabel = `${russian ? "Подзадачи" : "Subtasks"}: ${subtasks ?? 0}`;
     const toggle = () => {
       setClosed((old) => ({ ...old, [id]: open }));
       try { localStorage.setItem("project-folders:hub-chat-groups", JSON.stringify({ ...readClosedGroups(), [id]: open })); } catch { /* Storage may be disabled. */ }
     };
+    const leading = <button type="button" className="pf-icon pf-hub-disclosure" title={disclosure} aria-label={disclosure} aria-expanded={open} disabled={keepOpen || !children.length} draggable={false} onDragStart={(event) => { event.preventDefault(); event.stopPropagation(); }} onClick={(event) => { event.stopPropagation(); toggle(); }} onContextMenu={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+      <Icon name={open ? "ChevronDown" : "ChevronRight"} />
+    </button>;
+    const menuItems = <>
+      <DropdownMenuItem asChild><a className="pf-hub-chat-menu-link" href={href}><Icon name="ExternalLink" />{russian ? "Открыть в Hub" : "Open in Hub"}</a></DropdownMenuItem>
+      <DropdownMenuItem disabled={keepOpen || !children.length} onSelect={toggle}><Icon name={open ? "ChevronDown" : "ChevronRight"} />{open ? (russian ? "Свернуть чаты" : "Collapse chats") : (russian ? "Раскрыть чаты" : "Expand chats")}</DropdownMenuItem>
+    </>;
     return <div className="pf-hub-chat-group" key={node.task.id} data-hub-issue-id={node.task.id} data-state={node.task.state}>
-      <div className="pf-hub-chat-heading">
-        <button type="button" className="pf-icon pf-hub-disclosure" title={subtasks ? `${disclosure} · ${countLabel}` : disclosure} aria-label={disclosure} aria-expanded={open} data-counted={Boolean(subtasks) || undefined} disabled={node.active} onClick={toggle}>
-          <Icon name={open ? "ChevronDown" : "ChevronRight"} />
-          {subtasks ? <span className="pf-hub-chat-count" data-wide={subtasks > 99 || undefined} aria-label={countLabel}>{subtasks > 99 ? "99+" : subtasks}</span> : null}
-        </button>
+      {parent ? <div className="pf-hub-chat-parent">{renderThread(parent, { leading, menuItems, title: `${label} · ${state}` })}</div> : <div className="pf-hub-chat-heading">
+        {leading}
         <a className="pf-hub-chat-link" aria-label={label} title={`${label} · ${state}`} href={href}>
           <code>{node.task.key}</code><span>{node.task.title}</span>
         </a>
@@ -97,12 +116,11 @@ export function HubChatGroups({ threads, data, active, groupId, renderThread }: 
             <button type="button" className="pf-icon" title={russian ? "Действия задачи" : "Task actions"} aria-label={`${russian ? "Действия задачи" : "Task actions"}: ${node.task.key}`}><Icon name="MoreHorizontal" /></button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild><a className="pf-hub-chat-menu-link" href={href}><Icon name="ExternalLink" />{russian ? "Открыть в Hub" : "Open in Hub"}</a></DropdownMenuItem>
-            <DropdownMenuItem disabled={node.active} onSelect={toggle}><Icon name={open ? "ChevronDown" : "ChevronRight"} />{open ? (russian ? "Свернуть чаты" : "Collapse chats") : (russian ? "Раскрыть чаты" : "Expand chats")}</DropdownMenuItem>
+            {menuItems}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-      {open ? <div className="pf-hub-chat-children" style={{ marginInlineStart: depth < 4 ? 7 : 0 }}>{node.children.map((child) => render(child, depth + 1))}</div> : null}
+      </div>}
+      {open && children.length ? <div className="pf-hub-chat-children" style={{ marginInlineStart: depth < 4 ? 7 : 0 }}>{children.map((child) => render(child, depth + 1))}</div> : null}
     </div>;
   };
   return <>{hubChatTree(threads, data, active).map((node) => render(node, 0))}</>;
