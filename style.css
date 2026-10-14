@@ -120,12 +120,47 @@
   flex: none;
 }
 .pf-status {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
   width: 14px;
   height: 14px;
+}
+.pf-status-glyph {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.pf-status-exit {
+  animation: pf-status-shrink 70ms ease-in both;
+}
+.pf-status-enter {
+  animation: pf-status-grow 90ms ease-out 70ms both;
+}
+@keyframes pf-status-shrink {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+@keyframes pf-status-grow {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 .pf-thread a .pf-status svg {
   width: 14px;
@@ -140,8 +175,13 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pf-status-spinner {
+  .pf-status-spinner,
+  .pf-status-enter,
+  .pf-status-exit {
     animation: none;
+  }
+  .pf-status-exit {
+    display: none;
   }
 }
 .pf-unread {

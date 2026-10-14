@@ -1,4 +1,5 @@
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import { useEffect, useState } from "react";
 import { Icon } from "./components/ui/icon";
 import { t } from "./i18n";
 
@@ -64,6 +65,38 @@ export function ThreadStatus({ thread }: { thread: StatusThread }) {
               : state === "idle"
                 ? "Circle"
                 : null;
+  const [swap, setSwap] = useState<{
+    icon: typeof icon;
+    previous: typeof icon;
+    revision: number;
+    changing: boolean;
+  }>({
+    icon,
+    previous: null,
+    revision: 0,
+    changing: false,
+  });
+  // Retain the outgoing glyph for its exit animation, not for status semantics.
+  if (swap.icon !== icon) {
+    setSwap({
+      icon,
+      previous: swap.icon,
+      revision: swap.revision + 1,
+      changing: true,
+    });
+  }
+  useEffect(() => {
+    if (!swap.changing) return;
+    // Also clean up when reduced motion disables CSS animation events.
+    const timeout = window.setTimeout(() => {
+      setSwap((current) =>
+        current.revision === swap.revision
+          ? { ...current, previous: null, changing: false }
+          : current,
+      );
+    }, 200);
+    return () => window.clearTimeout(timeout);
+  }, [swap.revision, swap.changing]);
 
   return (
     <span
@@ -80,12 +113,34 @@ export function ThreadStatus({ thread }: { thread: StatusThread }) {
       }
       data-thread-status={state}
     >
-      {icon && (
-        <Icon
-          name={icon}
+      {swap.previous && (
+        <span
+          key={`out-${swap.revision}`}
+          className="pf-status-glyph pf-status-exit"
           aria-hidden="true"
-          className={state === "working" ? "pf-status-spinner" : undefined}
-        />
+        >
+          <Icon
+            name={swap.previous}
+            aria-hidden="true"
+            className={
+              swap.previous === "Spinner" ? "pf-status-spinner" : undefined
+            }
+          />
+        </span>
+      )}
+      {icon && (
+        <span
+          key={`in-${swap.revision}`}
+          className={`pf-status-glyph${swap.changing ? " pf-status-enter" : ""}`}
+          style={swap.previous ? undefined : { animationDelay: "0ms" }}
+          aria-hidden="true"
+        >
+          <Icon
+            name={icon}
+            aria-hidden="true"
+            className={state === "working" ? "pf-status-spinner" : undefined}
+          />
+        </span>
       )}
     </span>
   );
