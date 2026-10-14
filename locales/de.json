@@ -390,5 +390,21 @@
   "При импорте объединить с уже существующими записями": "Beim Import mit vorhandenen Einträgen zusammenführen",
   "Все данные импортированы.": "Alle Daten importiert.",
   "Заменить все данные плагина содержимым файла? Текущие разделы, правила и архивы будут удалены.": "Alle Plugindaten durch diese Datei ersetzen? Aktuelle Bereiche, Regeln und Archive werden gelöscht.",
-  "Перенос настроек, оформления и всех данных плагина через файл.": "Einstellungen, Erscheinungsbild und alle Plugindaten per Datei übertragen."
+  "Перенос настроек, оформления и всех данных плагина через файл.": "Einstellungen, Erscheinungsbild und alle Plugindaten per Datei übertragen.",
+  "Метки чатов": "Chat-Labels",
+  "Названия и цвета меток для чатов.": "Namen und Farben der Chat-Labels.",
+  "Название метки": "Labelname",
+  "Чатов": "Chats",
+  "Выше": "Nach oben",
+  "Ниже": "Nach unten",
+  "Удалить метку": "Label löschen",
+  "Она снимется со всех чатов": "Es wird von allen Chats entfernt",
+  "Метка": "Label",
+  "Метки": "Labels",
+  "Чату можно поставить одну метку: меню ⋯ у чата → «Метка». Она видна чипом после названия.": "Ein Chat kann ein Label haben: Chat-Menü ⋯ → „Label“. Es erscheint als Chip nach dem Titel.",
+  "Добавить метку": "Label hinzufügen",
+  "Меток пока нет.": "Noch keine Labels.",
+  "Без метки": "Kein Label",
+  "Настроить метки…": "Labels verwalten…",
+  "Создать метку…": "Label erstellen…"
 }

@@ -530,27 +530,32 @@ function IconPicker({
   );
 }
 
-function ColorPicker({
+export function ColorPicker({
   value,
   onChange,
   noneLabel,
 }: {
   value: string | undefined;
   onChange: (color: string | undefined) => void;
-  noneLabel: string;
+  /** Leave out to require a color (no «none» swatch). */
+  noneLabel?: string;
 }) {
   const custom = value?.startsWith("#") ? value : "#3b82f6";
   return (
     <div className="pf-swatches" role="radiogroup">
-      <button
-        type="button"
-        role="radio"
-        aria-checked={!value}
-        title={noneLabel}
-        aria-label={noneLabel}
-        className={"pf-swatch pf-swatch-none" + (!value ? " pf-selected" : "")}
-        onClick={() => onChange(undefined)}
-      />
+      {noneLabel !== undefined && (
+        <button
+          type="button"
+          role="radio"
+          aria-checked={!value}
+          title={noneLabel}
+          aria-label={noneLabel}
+          className={
+            "pf-swatch pf-swatch-none" + (!value ? " pf-selected" : "")
+          }
+          onClick={() => onChange(undefined)}
+        />
+      )}
       {COLOR_TOKENS.map((c) => (
         <button
           type="button"

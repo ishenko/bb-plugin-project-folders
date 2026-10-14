@@ -93,6 +93,7 @@ export const EXTENDED_ICON_NAMES = [
   "RotateCcw",
   "Rows2",
   "SecurityCheck",
+  "Tag",
   "Sent",
   "SideChat",
   "Smartphone",

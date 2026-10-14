@@ -8,6 +8,7 @@ import { within } from "./move-files";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { makeExportQueue } from "./export-queue";
+import { parseAssignments, parseTags, tagSchema, type Tag } from "./tags";
 import path from "node:path";
 import {
   BACKUP_KIND,
@@ -646,6 +647,33 @@ export const rpcContract = defineRpcContract({
     }),
     output: z.object({ ok: z.literal(true) }),
   },
+  tags_get: {
+    input: z.null(),
+    output: z.object({
+      tags: z.array(tagSchema),
+      /** Thread id to label id; one label per chat. */
+      assignments: z.record(z.string(), z.string()),
+    }),
+  },
+  tag_save: {
+    input: tagSchema.omit({ id: true }).extend({ id: tagSchema.shape.id.optional() }),
+    output: tagSchema,
+  },
+  tag_delete: {
+    input: z.object({ id: z.string().min(1) }),
+    output: z.object({ ok: z.literal(true) }),
+  },
+  tag_reorder: {
+    input: z.object({ ids: z.array(z.string().min(1)).max(500) }),
+    output: z.object({ ok: z.literal(true) }),
+  },
+  thread_tag_set: {
+    input: z.object({
+      threadId: z.string().min(1),
+      tagId: z.string().min(1).nullable(),
+    }),
+    output: z.object({ ok: z.literal(true) }),
+  },
   item_style_save: {
     input: z.object({
       key: z.string().regex(/^[pf]:.{1,200}$/),
@@ -791,6 +819,9 @@ export default async function plugin(bb: BbPluginApi) {
     `INSERT INTO folders_v2 (id, projectId, hostId, parentId, name, path, sort, kind) SELECT id, projectId, hostId, parentId, name, path, sort, kind FROM folders`,
     `DROP TABLE folders`,
     `ALTER TABLE folders_v2 RENAME TO folders`,
+    // Chat labels: names and colors, and at most one label per chat.
+    `CREATE TABLE thread_tags (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, sort INTEGER NOT NULL DEFAULT 0)`,
+    `CREATE TABLE thread_tag_assignments (threadId TEXT PRIMARY KEY, tagId TEXT NOT NULL)`,
   ]);
   // Older versions recorded this normal out-of-scope condition as an error.
   // Preserve successful exports, other failures and all project/chat state.
@@ -3549,6 +3580,73 @@ export default async function plugin(bb: BbPluginApi) {
       bb.realtime.publish("prefs", {});
       return { ok: true as const };
     },
+    tags_get: () => {
+      const tags = parseTags(
+        db.prepare("SELECT id, name, color FROM thread_tags ORDER BY sort, rowid").all(),
+      );
+      const rows = db
+        .prepare("SELECT threadId, tagId FROM thread_tag_assignments")
+        .all() as { threadId: string; tagId: string }[];
+      return {
+        tags,
+        assignments: parseAssignments(
+          Object.fromEntries(rows.map((r) => [r.threadId, r.tagId])),
+          tags,
+        ),
+      };
+    },
+    tag_save: ({ id, name, color }) => {
+      const tag: Tag = { id: id ?? randomUUID(), name: name.trim(), color };
+      const exists = db.prepare("SELECT 1 FROM thread_tags WHERE id=?").get(tag.id);
+      if (exists)
+        db.prepare("UPDATE thread_tags SET name=?, color=? WHERE id=?").run(
+          tag.name,
+          tag.color,
+          tag.id,
+        );
+      else {
+        const { next } = db
+          .prepare("SELECT COALESCE(MAX(sort), -1) + 1 AS next FROM thread_tags")
+          .get() as { next: number };
+        db.prepare(
+          "INSERT INTO thread_tags (id, name, color, sort) VALUES (?, ?, ?, ?)",
+        ).run(tag.id, tag.name, tag.color, next);
+      }
+      bb.realtime.publish("tags", {});
+      return tag;
+    },
+    tag_delete: ({ id }) => {
+      db.transaction(() => {
+        db.prepare("DELETE FROM thread_tag_assignments WHERE tagId=?").run(id);
+        db.prepare("DELETE FROM thread_tags WHERE id=?").run(id);
+      })();
+      bb.realtime.publish("tags", {});
+      return { ok: true as const };
+    },
+    tag_reorder: ({ ids }) => {
+      db.transaction(() => {
+        ids.forEach((id, sort) =>
+          db.prepare("UPDATE thread_tags SET sort=? WHERE id=?").run(sort, id),
+        );
+      })();
+      bb.realtime.publish("tags", {});
+      return { ok: true as const };
+    },
+    thread_tag_set: ({ threadId, tagId }) => {
+      if (tagId === null)
+        db.prepare("DELETE FROM thread_tag_assignments WHERE threadId=?").run(
+          threadId,
+        );
+      else {
+        if (!db.prepare("SELECT 1 FROM thread_tags WHERE id=?").get(tagId))
+          throw new Error("Label not found.");
+        db.prepare(
+          "INSERT INTO thread_tag_assignments (threadId, tagId) VALUES (?, ?) ON CONFLICT(threadId) DO UPDATE SET tagId=excluded.tagId",
+        ).run(threadId, tagId);
+      }
+      bb.realtime.publish("tags", {});
+      return { ok: true as const };
+    },
     item_style_save: ({ key, style }) => {
       const clean = style ? parseItemStyles({ [key]: style })[key] : undefined;
       if (clean)
@@ -3578,6 +3676,7 @@ export default async function plugin(bb: BbPluginApi) {
         : agentsDefaults;
       changed();
       bb.realtime.publish("prefs", {});
+      bb.realtime.publish("tags", {});
       return Object.keys(parsed.settings).length > 0
         ? { ...counts, settingsNotRestored: true }
         : counts;

@@ -47,7 +47,7 @@ const iconValue = z
   .max(64)
   .regex(/^(icon:[A-Za-z0-9]{1,48}|emoji:.{1,16})$/u);
 /** A plain pattern: RPC schemas travel as JSON Schema, where refinements are lost. */
-const colorValue = z
+export const colorValue = z
   .string()
   .regex(new RegExp(`^(#[0-9a-fA-F]{6}|${COLOR_TOKENS.join("|")})$`));
 export const styleSchema = z.object({

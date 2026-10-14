@@ -118,6 +118,10 @@ describe("full backup export and import", () => {
         customTarget: "file",
         startup: "",
       });
+      const label = (await call("tag_save", { name: "Ops", color: "teal" })) as {
+        id: string;
+      };
+      await call("thread_tag_set", { threadId: "tx", tagId: label.id });
       db.prepare("INSERT INTO folder_archives VALUES (?,?,?)").run(
         "arch-1",
         1_700_000_000_000,

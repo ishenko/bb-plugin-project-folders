@@ -2,7 +2,7 @@
 title: Personal Projects & Sections fork
 status: active
 owner: Igor
-updated: 2026-10-09
+updated: 2026-10-14
 tags: [bb, plugin, fork]
 ---
 
@@ -16,7 +16,7 @@ tags: [bb, plugin, fork]
 - GitHub fork: `ishenko/bb-plugin-project-folders` (already existed; reused rather than replacing existing branches).
 - Personal branch: `personal/igor-20261009-export-fix`.
 - Base: upstream v0.6.30, commit `b4bb6d0a064a0946e2f1da9235aa6cc4d0c47ef4`.
-- Personal version: `0.6.30-igor.1`.
+- Personal version: `0.6.30-igor.2`.
 - `origin` is the personal fork; `upstream` is `VKirill/bb-plugin-project-folders`.
 - Existing local thread-status icons and styles are retained in this branch.
 - Upstream changes are integrated deliberately in this checkout, tested, built and reloaded; never automatically substituted for personal changes.
@@ -28,6 +28,7 @@ tags: [bb, plugin, fork]
 | Automatic history export | Personal chats, unregistered worktrees and retired/unregistered workspaces settle without persisting an out-of-scope export error or retrying forever. |
 | Explicit manual export | An unregistered folder still produces an actionable error; it is not reported as a successful export. |
 | Existing diagnostic rows | At plugin startup, remove only the exact legacy unregistered-folder error with a null export path. Preserve successful export records, other errors and all project/chat state. |
+| Chat labels | Settings → «Метки чатов» defines labels (name + color). Chat menu ⋯ → «Метка» sets one label per chat, shown as a compact chip after the title. Tables `thread_tags` / `thread_tag_assignments`, included in the full backup. |
 | BB SDK compatibility | Pin SDK 0.6.15; use current composer hooks and methods. Preserve provider-defined service tier strings. |
 
 The dependency lockfile also advances `source-map-js` to its compatible patched release; `npm audit` reports zero vulnerabilities at verification time.

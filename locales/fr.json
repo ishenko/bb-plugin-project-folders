@@ -390,5 +390,21 @@
   "При импорте объединить с уже существующими записями": "Fusionner avec les enregistrements existants à l’import",
   "Все данные импортированы.": "Toutes les données ont été importées.",
   "Заменить все данные плагина содержимым файла? Текущие разделы, правила и архивы будут удалены.": "Remplacer toutes les données du plugin par ce fichier ? Les sections, règles et archives actuelles seront supprimées.",
-  "Перенос настроек, оформления и всех данных плагина через файл.": "Transférer les réglages, l’apparence et toutes les données du plugin via un fichier."
+  "Перенос настроек, оформления и всех данных плагина через файл.": "Transférer les réglages, l’apparence et toutes les données du plugin via un fichier.",
+  "Метки чатов": "Étiquettes de chats",
+  "Названия и цвета меток для чатов.": "Noms et couleurs des étiquettes de chats.",
+  "Название метки": "Nom de l’étiquette",
+  "Чатов": "Chats",
+  "Выше": "Monter",
+  "Ниже": "Descendre",
+  "Удалить метку": "Supprimer l’étiquette",
+  "Она снимется со всех чатов": "Elle sera retirée de tous les chats",
+  "Метка": "Étiquette",
+  "Метки": "Étiquettes",
+  "Чату можно поставить одну метку: меню ⋯ у чата → «Метка». Она видна чипом после названия.": "Un chat peut avoir une étiquette : menu ⋯ du chat → « Étiquette ». Elle s’affiche en pastille après le titre.",
+  "Добавить метку": "Ajouter une étiquette",
+  "Меток пока нет.": "Aucune étiquette pour l’instant.",
+  "Без метки": "Sans étiquette",
+  "Настроить метки…": "Gérer les étiquettes…",
+  "Создать метку…": "Créer une étiquette…"
 }
