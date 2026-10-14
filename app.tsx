@@ -1,6 +1,7 @@
 import { FolderBrowser } from "./folder-browser";
 import { ThreadSectionLabel } from "./thread-section-label";
 import { ThreadStatus } from "./thread-status";
+import { HubProjectTasks } from "./hub-tasks";
 import {
   MoveDialog,
   PendingMoves,
@@ -4738,6 +4739,7 @@ function Panel({ subPath }: PluginNavPanelProps) {
         <main className="pf-main">
           <PendingMoves />
           <PendingSectionMoves />
+          {sel && selRoot ? <HubProjectTasks key={sel.projectId} projectId={sel.projectId} /> : null}
           {details}
           {!sel && (
             <SettingsPane

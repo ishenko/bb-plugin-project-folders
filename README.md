@@ -27,3 +27,12 @@ In BB, choose Projects & Sections as the sidebar thread list if it is not select
 The interface is available in English, Russian, Spanish, French, German, Portuguese, Simplified Chinese, Japanese, Korean, Hindi and Arabic (`i18n.tsx:13-37`).
 
 See [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md).
+
+## Workspace Hub Tasks
+
+Selecting a project on the management page shows its Hub task tree above the project settings. Parent rows expand to subtasks with statuses, assignees, columns, full child counts, issue links and active-chat actions. Search retains parent context; completed and canceled tasks are hidden by default. The overview refreshes every 15 seconds while visible, on focus and through its refresh action.
+
+The integration calls Hub's versioned, read-only `project_tasks` RPC through the public BB SDK and validates the response. Projects without Hub setup have no task section; an unavailable Hub shows a retryable status without breaking project management. This section supports Russian and English, with English fallback for other locales.
+
+> [!NOTE]
+> Overview payloads contain at most 500 tasks in parent-first order and explicitly label truncation. Counters include all nonarchived tasks across boards, even when filtering or hiding completed tasks. Accepted and canceled tasks are not counted as Done. Opening the full Hub board remains available; this section never starts, moves, accepts or merges tasks.
