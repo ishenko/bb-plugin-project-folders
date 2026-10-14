@@ -27,21 +27,36 @@ beforeAll(async () => { installTestMatchMedia(); app = await loadPluginApp(() =>
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 const ids = (nodes: HubChatNode[]): string[] => nodes.flatMap((node) => node.kind === "thread" ? [node.thread.id] : ids(node.children));
 
-it("renders the full subtask count before the chevron and replaces the dot with a working menu", async () => {
+it("embeds the full subtask count in the chevron button and keeps a working menu", async () => {
   const slot = renderSlot({ component: HubChatGroups }, { threads: all, data, active: null, groupId: "p1", renderThread: (chat: PluginSidebarThread) => <span key={chat.id}>{chat.title}</span> });
   const heading = slot.container.querySelector(".pf-hub-chat-heading")!;
   const count = heading.querySelector(".pf-hub-chat-count")!;
   expect(count.textContent).toBe("6");
   expect(count.getAttribute("aria-label")).toBe("Subtasks: 6");
-  expect(count.nextElementSibling?.getAttribute("aria-label")).toBe("Collapse TA-1");
+  const disclosure = count.closest("button")!;
+  expect(disclosure.getAttribute("aria-label")).toBe("Collapse TA-1");
+  expect(disclosure.getAttribute("data-counted")).toBe("true");
+  expect(disclosure.querySelector('[data-icon="ChevronDown"]')).not.toBeNull();
+  expect(heading.firstElementChild).toBe(disclosure);
+  fireEvent.click(disclosure);
+  expect(disclosure.querySelector('[data-icon="ChevronRight"]')).not.toBeNull();
+  fireEvent.click(disclosure);
   expect(slot.container.querySelector(".pf-hub-chat-state")).toBeNull();
   const childHeading = slot.container.querySelector('[data-hub-issue-id="child"] .pf-hub-chat-heading')!;
-  expect(childHeading.querySelector(".pf-hub-chat-count")?.textContent).toBe("");
+  expect(childHeading.querySelector(".pf-hub-chat-count")).toBeNull();
   fireEvent.pointerDown(slot.getByRole("button", { name: "Task actions: TA-2" }), { button: 0, ctrlKey: false });
   const link = await slot.findByRole("menuitem", { name: "Open in Hub" });
   expect(link.getAttribute("href")).toBe("/plugins/hub/hub/p/p1/issue/child");
   fireEvent.click(slot.getByRole("menuitem", { name: "Expand chats" }));
   expect(slot.getByText("Chat t1")).toBeTruthy();
+  slot.lifecycle.unmount();
+});
+
+it("keeps large counts compact inside the arrow with the exact count in the tooltip", () => {
+  const many = { ...data, tasks: data.tasks.map((task) => ({ ...task, subtaskCount: 345 })) };
+  const slot = renderSlot({ component: HubChatGroups }, { threads: [thread("t3")], data: many, active: null, groupId: "p1", renderThread: (chat: PluginSidebarThread) => <span key={chat.id}>{chat.title}</span> });
+  expect(slot.getByText("99+").getAttribute("aria-label")).toBe("Subtasks: 345");
+  expect(slot.getByRole("button", { name: "Collapse TA-1" }).getAttribute("title")).toBe("Collapse TA-1 · Subtasks: 345");
   slot.lifecycle.unmount();
 });
 

@@ -84,8 +84,10 @@ export function HubChatGroups({ threads, data, active, groupId, renderThread }: 
     };
     return <div className="pf-hub-chat-group" key={node.task.id} data-hub-issue-id={node.task.id} data-state={node.task.state}>
       <div className="pf-hub-chat-heading">
-        <span className="pf-hub-chat-count" title={subtasks ? countLabel : undefined} aria-label={subtasks ? countLabel : undefined}>{subtasks ? subtasks : null}</span>
-        <button type="button" className="pf-icon" title={disclosure} aria-label={disclosure} aria-expanded={open} disabled={node.active} onClick={toggle}><Icon name={open ? "ChevronDown" : "ChevronRight"} /></button>
+        <button type="button" className="pf-icon pf-hub-disclosure" title={subtasks ? `${disclosure} · ${countLabel}` : disclosure} aria-label={disclosure} aria-expanded={open} data-counted={Boolean(subtasks) || undefined} disabled={node.active} onClick={toggle}>
+          <Icon name={open ? "ChevronDown" : "ChevronRight"} />
+          {subtasks ? <span className="pf-hub-chat-count" data-wide={subtasks > 99 || undefined} aria-label={countLabel}>{subtasks > 99 ? "99+" : subtasks}</span> : null}
+        </button>
         <a className="pf-hub-chat-link" aria-label={label} title={`${label} · ${state}`} href={href}>
           <code>{node.task.key}</code><span>{node.task.title}</span>
         </a>
