@@ -2,6 +2,7 @@ import { FolderBrowser } from "./folder-browser";
 import { ThreadSectionLabel } from "./thread-section-label";
 import { ThreadStatus } from "./thread-status";
 import { HubProjectTasks } from "./hub-tasks";
+import { HubChatGroups, useHubSidebar } from "./hub-sidebar";
 import {
   MoveDialog,
   PendingMoves,
@@ -2244,6 +2245,7 @@ function Tree(props: PluginThreadListProps) {
   } | null>(null);
   const [regrouping, setRegrouping] = useState<Folder | null>(null);
   const { threads, projects, status } = experimental_useSidebarThreads();
+  const hubSidebar = useHubSidebar(threads);
   const environmentKey = threads.map((t) => t.environment?.id ?? "").join("|");
   useEffect(refresh, [environmentKey, refresh]);
   const actions = experimental_useSidebarThreadActions();
@@ -2494,7 +2496,7 @@ function Tree(props: PluginThreadListProps) {
       sorted.length;
     return (
       <>
-        {shown.map((thread) => (
+        <HubChatGroups threads={shown} data={hubSidebar} active={props.activeThreadId} groupId={group} renderThread={(thread) => (
           <ThreadRow
             key={thread.id}
             thread={thread}
@@ -2518,7 +2520,7 @@ function Tree(props: PluginThreadListProps) {
               }
             }}
           />
-        ))}
+        )} />
         {hasHidden && (
           <button
             className="pf-show-more"

@@ -36,3 +36,7 @@ The integration calls Hub's versioned, read-only `project_tasks` RPC through the
 
 > [!NOTE]
 > Overview payloads contain at most 500 tasks in parent-first order and explicitly label truncation. Counters include all nonarchived tasks across boards, even when filtering or hiding completed tasks. Accepted and canceled tasks are not counted as Done. Opening the full Hub board remains available; this section never starts, moves, accepts or merges tasks.
+
+The Projects sidebar also groups Hub worker chats by task and actual subtask ancestry, including previous attempts. Ordinary chats and existing section placement stay unchanged. Quiet subtasks start collapsed; unread, pinned and busy paths initially expand, and the current chat's path remains open. Disclosure is remembered per section. Existing chat limits and Show all apply before grouping; the number beside a task counts chats in the current list, including descendants, not completed subtasks. Issue titles open Hub; thread rows keep native navigation, menus and drag behavior.
+
+Sidebar metadata uses the optional read-only `sidebar_tasks` RPC in batches of up to 200 thread IDs, with up to 1000 task records and 32 ancestor hops per batch. It refreshes every 15 seconds while visible and on focus. When Hub is unavailable or a chat has no authoritative mapping, its original flat row remains accessible. Only Hub-attributed chats are grouped; task associations are never guessed from titles.

@@ -1,0 +1,14 @@
+.pf-hub-chat-group { min-width: 0; }
+.pf-hub-chat-heading { display: flex; align-items: center; gap: 3px; min-height: 32px; min-width: 0; }
+.pf-hub-chat-heading .pf-icon { flex: 0 0 28px; }
+.pf-hub-chat-heading .pf-icon:disabled { opacity: .65; cursor: default; }
+.pf-hub-chat-link { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; text-decoration: none; color: var(--foreground); font-size: 12px; }
+.pf-hub-chat-link code { flex-shrink: 0; color: var(--muted-foreground); font-size: 10px; }
+.pf-hub-chat-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-hub-chat-count { color: var(--muted-foreground); font-size: 10px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.pf-hub-chat-state { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--muted-foreground); margin-inline: 3px; }
+.pf-hub-chat-state[data-state="done"] { background: #38986a; }
+.pf-hub-chat-state[data-state="running"], .pf-hub-chat-state[data-state="queued"] { background: #5089ca; }
+.pf-hub-chat-state[data-state="failed"], .pf-hub-chat-state[data-state="blocked"] { background: #cf6262; }
+.pf-hub-chat-state[data-state="waiting"], .pf-hub-chat-state[data-state="review"], .pf-hub-chat-state[data-state="accepted"] { background: #c39b35; }
+.pf-hub-chat-children { padding-inline-start: 5px; border-inline-start: 1px solid var(--border); min-width: 0; }
