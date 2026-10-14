@@ -9,6 +9,7 @@ export const hubSidebarSchema = z.object({
     key: z.string(), title: z.string(),
     state: z.enum(["open", "queued", "running", "waiting", "blocked", "paused", "review", "accepted", "done", "failed", "stopped", "canceled"]),
     archived: z.boolean(),
+    subtaskCount: z.number().int().nonnegative().optional(),
   })).max(1000),
   threads: z.array(z.object({ threadId: z.string(), issueId: z.string() })).max(200),
 });

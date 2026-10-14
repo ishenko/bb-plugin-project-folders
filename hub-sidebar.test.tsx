@@ -17,8 +17,8 @@ const thread = (id: string, overrides: Partial<PluginSidebarThread> = {}): Plugi
   ...overrides,
 });
 const data: HubSidebar = { version: 1, tasks: [
-  { id: "parent", parentId: null, projectId: "p1", key: "TA-1", title: "Parent", state: "running", archived: false },
-  { id: "child", parentId: "parent", projectId: "p1", key: "TA-2", title: "Child", state: "done", archived: false },
+  { id: "parent", parentId: null, projectId: "p1", key: "TA-1", title: "Parent", state: "running", archived: false, subtaskCount: 6 },
+  { id: "child", parentId: "parent", projectId: "p1", key: "TA-2", title: "Child", state: "done", archived: false, subtaskCount: 0 },
 ], threads: [{ threadId: "t1", issueId: "child" }, { threadId: "t2", issueId: "child" }, { threadId: "t3", issueId: "parent" }] };
 const all = [thread("t1"), thread("t2"), thread("t3"), thread("plain", { originPluginId: null, title: "TA-2 misleading title" })];
 const root = { id: "p1", projectId: "p1", hostId: "h1", parentId: null, path: "/work", name: "Project" };
@@ -26,6 +26,24 @@ let app: Awaited<ReturnType<typeof loadPluginApp>>;
 beforeAll(async () => { installTestMatchMedia(); app = await loadPluginApp(() => import("./app")); });
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 const ids = (nodes: HubChatNode[]): string[] => nodes.flatMap((node) => node.kind === "thread" ? [node.thread.id] : ids(node.children));
+
+it("renders the full subtask count before the chevron and replaces the dot with a working menu", async () => {
+  const slot = renderSlot({ component: HubChatGroups }, { threads: all, data, active: null, groupId: "p1", renderThread: (chat: PluginSidebarThread) => <span key={chat.id}>{chat.title}</span> });
+  const heading = slot.container.querySelector(".pf-hub-chat-heading")!;
+  const count = heading.querySelector(".pf-hub-chat-count")!;
+  expect(count.textContent).toBe("6");
+  expect(count.getAttribute("aria-label")).toBe("Subtasks: 6");
+  expect(count.nextElementSibling?.getAttribute("aria-label")).toBe("Collapse TA-1");
+  expect(slot.container.querySelector(".pf-hub-chat-state")).toBeNull();
+  const childHeading = slot.container.querySelector('[data-hub-issue-id="child"] .pf-hub-chat-heading')!;
+  expect(childHeading.querySelector(".pf-hub-chat-count")?.textContent).toBe("");
+  fireEvent.pointerDown(slot.getByRole("button", { name: "Task actions: TA-2" }), { button: 0, ctrlKey: false });
+  const link = await slot.findByRole("menuitem", { name: "Open in Hub" });
+  expect(link.getAttribute("href")).toBe("/plugins/hub/hub/p/p1/issue/child");
+  fireEvent.click(slot.getByRole("menuitem", { name: "Expand chats" }));
+  expect(slot.getByText("Chat t1")).toBeTruthy();
+  slot.lifecycle.unmount();
+});
 
 it("groups historical chats once with real ancestors and leaves ordinary or foreign chats flat", () => {
   const tree = hubChatTree(all, data, null);

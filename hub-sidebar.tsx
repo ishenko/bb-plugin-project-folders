@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { hubChatTree, hubSidebarSchema, type HubSidebar, type HubChatNode } from "./hub-sidebar-contract";
 import { Icon } from "./components/ui/icon";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "./components/ui/dropdown-menu";
 import { useLanguage } from "./i18n";
 import "./hub-sidebar.css";
 
@@ -74,18 +75,30 @@ export function HubChatGroups({ threads, data, active, groupId, renderThread }: 
     const label = `${node.task.key} ${node.task.title}`;
     const state = stateLabels[node.task.state][russian ? 1 : 0];
     const disclosure = `${open ? (russian ? "Свернуть" : "Collapse") : (russian ? "Раскрыть" : "Expand")} ${node.task.key}`;
+    const href = `/plugins/hub/hub/p/${encodeURIComponent(node.task.projectId)}/issue/${encodeURIComponent(node.task.id)}`;
+    const subtasks = node.task.subtaskCount;
+    const countLabel = `${russian ? "Подзадачи" : "Subtasks"}: ${subtasks ?? 0}`;
+    const toggle = () => {
+      setClosed((old) => ({ ...old, [id]: open }));
+      try { localStorage.setItem("project-folders:hub-chat-groups", JSON.stringify({ ...readClosedGroups(), [id]: open })); } catch { /* Storage may be disabled. */ }
+    };
     return <div className="pf-hub-chat-group" key={node.task.id} data-hub-issue-id={node.task.id} data-state={node.task.state}>
       <div className="pf-hub-chat-heading">
-        <button type="button" className="pf-icon" title={disclosure} aria-label={disclosure} aria-expanded={open} disabled={node.active} onClick={() => {
-          setClosed((old) => ({ ...old, [id]: open }));
-          try { localStorage.setItem("project-folders:hub-chat-groups", JSON.stringify({ ...readClosedGroups(), [id]: open })); } catch { /* Storage may be disabled. */ }
-        }}><Icon name={open ? "ChevronDown" : "ChevronRight"} /></button>
-        <a className="pf-hub-chat-link" aria-label={label} title={label} href={`/plugins/hub/hub/p/${encodeURIComponent(node.task.projectId)}/issue/${encodeURIComponent(node.task.id)}`}>
+        <span className="pf-hub-chat-count" title={subtasks ? countLabel : undefined} aria-label={subtasks ? countLabel : undefined}>{subtasks ? subtasks : null}</span>
+        <button type="button" className="pf-icon" title={disclosure} aria-label={disclosure} aria-expanded={open} disabled={node.active} onClick={toggle}><Icon name={open ? "ChevronDown" : "ChevronRight"} /></button>
+        <a className="pf-hub-chat-link" aria-label={label} title={`${label} · ${state}`} href={href}>
           <code>{node.task.key}</code><span>{node.task.title}</span>
         </a>
-        <span className="pf-hub-chat-count" title={russian ? "Чаты в текущем списке" : "Chats in the current list"}>{node.count}</span>
-        <span className="pf-hub-chat-state" data-state={node.task.state} title={state} aria-label={state} />
         {node.task.archived ? <span title={russian ? "В архиве" : "Archived"}><Icon name="Archive" /></span> : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className="pf-icon" title={russian ? "Действия задачи" : "Task actions"} aria-label={`${russian ? "Действия задачи" : "Task actions"}: ${node.task.key}`}><Icon name="MoreHorizontal" /></button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild><a className="pf-hub-chat-menu-link" href={href}><Icon name="ExternalLink" />{russian ? "Открыть в Hub" : "Open in Hub"}</a></DropdownMenuItem>
+            <DropdownMenuItem disabled={node.active} onSelect={toggle}><Icon name={open ? "ChevronDown" : "ChevronRight"} />{open ? (russian ? "Свернуть чаты" : "Collapse chats") : (russian ? "Раскрыть чаты" : "Expand chats")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {open ? <div className="pf-hub-chat-children" style={{ marginInlineStart: depth < 4 ? 7 : 0 }}>{node.children.map((child) => render(child, depth + 1))}</div> : null}
     </div>;
