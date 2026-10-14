@@ -59,6 +59,142 @@ const root = {
   name: "Project",
 };
 const folder = { ...root, id: "f1", path: "/work/Section", name: "Section" };
+function notificationView({
+  own = "inherit",
+  parentThreadId = null,
+  ancestorCap = null,
+  failLoad = false,
+  failSave = false,
+}: {
+  own?: "inherit" | "all" | "input-only" | "muted";
+  parentThreadId?: string | null;
+  ancestorCap?: { level: "all" | "input-only" | "muted"; threadId: string } | null;
+  failLoad?: boolean;
+  failSave?: boolean;
+} = {}) {
+  const callRpc = vi.fn(async (args) => {
+    if (args.method === "threadNotifications.list") {
+      if (failLoad) throw new Error("Notifications unavailable");
+      return { threads: { t1: { own, ancestorCap } } };
+    }
+    if (args.method === "threadNotifications.set") {
+      if (failSave) throw new Error("Save failed");
+      own = args.input.level;
+      return { own, ancestorCap };
+    }
+    throw new Error(`Unexpected method: ${args.method}`);
+  });
+  const getSettings = vi.fn(async () => ({
+    ok: true as const,
+    schema: {},
+    values: { defaultLevel: "all", childLevel: "input-only" },
+  }));
+  const view = renderSlot(app.threadLists[0]!, { activeThreadId: null, onNavigate() {} }, {
+    sidebarThreads: { threads: [{ ...thread, parentThreadId }], projects: [] },
+    rpc: { list: () => ({ folders: [], roots: [root], bindings: {}, errors: [] }) },
+    sdk: { plugins: { callRpc, getSettings } },
+  });
+  return { view, callRpc, getSettings };
+}
+
+it("loads notifications only when chosen from the ellipsis and saves the selected thread", async () => {
+  const { view, callRpc, getSettings } = notificationView({ own: "muted" });
+  const row = (await view.findByText("Example chat")).closest(".pf-thread")!;
+  fireEvent.pointerDown(row.querySelector('button[aria-haspopup="menu"]')!, { button: 0, ctrlKey: false });
+  const menu = await view.findByRole("menuitem", { name: "Notifications" });
+  expect(menu.querySelector('[data-icon="BellDot"]')).not.toBeNull();
+  expect(callRpc).not.toHaveBeenCalled();
+  expect(getSettings).not.toHaveBeenCalled();
+  fireEvent.click(menu);
+  expect(await view.findByRole("dialog", { name: "Notifications" })).toBeTruthy();
+  await waitFor(() => expect((view.getByRole("radio", { name: "Muted" }) as HTMLInputElement).checked).toBe(true));
+  expect(callRpc).toHaveBeenCalledWith(expect.objectContaining({
+    pluginId: "push-notifications", method: "threadNotifications.list", input: { threadIds: ["t1"] },
+  }));
+  expect(view.getByRole("button", { name: "Save" }).hasAttribute("disabled")).toBe(true);
+  fireEvent.click(view.getByRole("radio", { name: "Needs input only" }));
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(callRpc).toHaveBeenCalledWith(expect.objectContaining({
+    pluginId: "push-notifications", method: "threadNotifications.set", input: { threadId: "t1", level: "input-only" },
+  })));
+  await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+  view.lifecycle.unmount();
+});
+
+it("can clear a thread override back to Default from the right-click menu", async () => {
+  const { view, callRpc } = notificationView({ own: "muted" });
+  fireEvent.contextMenu(await view.findByText("Example chat"));
+  fireEvent.click(await view.findByRole("menuitem", { name: "Notifications" }));
+  fireEvent.click(await view.findByRole("radio", { name: "Default (All activity)" }));
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(callRpc).toHaveBeenCalledWith(expect.objectContaining({
+    method: "threadNotifications.set", input: { threadId: "t1", level: "inherit" },
+  })));
+  view.lifecycle.unmount();
+});
+
+it.each(["parent", "ancestor"])("shows child defaults and a cap imposed by a %s", async (source) => {
+  const { view } = notificationView({
+    parentThreadId: "parent", ancestorCap: { threadId: source, level: "muted" },
+  });
+  fireEvent.contextMenu(await view.findByText("Example chat"));
+  fireEvent.click(await view.findByRole("menuitem", { name: "Notifications" }));
+  expect(await view.findByRole("radio", { name: "Default (Needs input only)" })).toBeTruthy();
+  expect(view.getByRole("status").textContent).toBe(
+    source === "parent" ? "Limited by a parent thread: Muted" : "Limited by an ancestor thread: Muted",
+  );
+  view.lifecycle.unmount();
+});
+
+it("does not write notifications when cancelled", async () => {
+  const { view, callRpc } = notificationView();
+  fireEvent.contextMenu(await view.findByText("Example chat"));
+  fireEvent.click(await view.findByRole("menuitem", { name: "Notifications" }));
+  fireEvent.click(await view.findByRole("radio", { name: "Muted" }));
+  fireEvent.click(view.getByRole("button", { name: "Cancel" }));
+  expect(callRpc.mock.calls.every(([args]) => args.method === "threadNotifications.list")).toBe(true);
+  view.lifecycle.unmount();
+});
+
+it("contains notification load failures and allows retry without affecting other actions", async () => {
+  const { view, callRpc } = notificationView({ failLoad: true });
+  fireEvent.contextMenu(await view.findByText("Example chat"));
+  expect(await view.findByRole("menuitem", { name: "Pin" })).toBeTruthy();
+  fireEvent.click(view.getByRole("menuitem", { name: "Notifications" }));
+  expect((await view.findByRole("alert")).textContent).toContain("Notifications unavailable");
+  expect(view.queryByRole("radio")).toBeNull();
+  expect(view.getByRole("button", { name: "Save" }).hasAttribute("disabled")).toBe(true);
+  callRpc.mockResolvedValueOnce({ threads: {} });
+  fireEvent.click(view.getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect((view.getByRole("radio", { name: "Default (All activity)" }) as HTMLInputElement).checked).toBe(true));
+  view.lifecycle.unmount();
+});
+
+it("keeps the dialog and selection available after a failed save", async () => {
+  const { view, callRpc } = notificationView({ failSave: true });
+  fireEvent.contextMenu(await view.findByText("Example chat"));
+  fireEvent.click(await view.findByRole("menuitem", { name: "Notifications" }));
+  fireEvent.click(await view.findByRole("radio", { name: "Muted" }));
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
+  expect((await view.findByRole("alert")).textContent).toContain("Save failed");
+  expect((view.getByRole("radio", { name: "Muted" }) as HTMLInputElement).checked).toBe(true);
+  callRpc.mockResolvedValueOnce({ own: "muted", ancestorCap: null });
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+  view.lifecycle.unmount();
+});
+
+it("opens notification choices from the compact chat actions drawer", async () => {
+  setCompactViewport(true);
+  const { view } = notificationView();
+  const row = (await view.findByText("Example chat")).closest(".pf-thread")!;
+  fireEvent.click(row.querySelector('button[aria-haspopup="menu"]')!);
+  fireEvent.click(await view.findByRole("menuitem", { name: "Notifications" }));
+  expect(await view.findByRole("dialog", { name: "Notifications" })).toBeTruthy();
+  expect(await view.findAllByRole("radio")).toHaveLength(4);
+  view.lifecycle.unmount();
+});
+
 it("keeps Hub parent and subtask chats flat, with native menus and no Hub RPC calls", async () => {
   const callRpc = vi.fn(async () => { throw new Error("Hub unavailable"); });
   const chats = [

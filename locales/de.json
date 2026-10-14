@@ -1,4 +1,10 @@
 {
+  "Уведомления": "Benachrichtigungen",
+  "Все события": "Alle Aktivitäten",
+  "Только запросы ввода": "Nur bei erforderlicher Eingabe",
+  "Без уведомлений": "Stumm",
+  "Ограничено родительским тредом": "Durch übergeordneten Thread begrenzt",
+  "Ограничено вышестоящим тредом": "Durch einen Vorgänger-Thread begrenzt",
   "Выбор папки": "Ordner auswählen",
   "Новый раздел": "Neuer Bereich",
   "Правила работы": "Arbeitsregeln",

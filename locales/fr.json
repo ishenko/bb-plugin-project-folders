@@ -1,4 +1,10 @@
 {
+  "Уведомления": "Notifications",
+  "Все события": "Toute l'activité",
+  "Только запросы ввода": "Intervention requise uniquement",
+  "Без уведомлений": "Désactivées",
+  "Ограничено родительским тредом": "Limité par le fil parent",
+  "Ограничено вышестоящим тредом": "Limité par un fil ancêtre",
   "Выбор папки": "Choisir un dossier",
   "Новый раздел": "Nouvelle section",
   "Правила работы": "Règles de travail",

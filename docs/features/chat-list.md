@@ -2,7 +2,7 @@
 title: Chat list and activity
 type: component
 created: 2026-09-27
-updated: 2026-09-30
+updated: 2026-10-14
 status: active
 confidence: high
 tags: [chat-list, activity, sidebar]
@@ -30,6 +30,8 @@ The plugin replaces a flat thread listing with project/section rows and per-plac
 5. Sections can auto-collapse based on activity age; manually stored collapse choices override automatic behavior (`chat-list.ts:95-131`, `chat-list.ts:202-220`).
 
 ## Modes
+
+The chat's ellipsis and right-click menus include **Notifications**. The dialog offers Default, All activity, Needs input only and Muted, reading and saving the same per-thread preferences as BB's own thread menu through the built-in `push-notifications` plugin. Default shows the global or child-thread fallback; parent and ancestor caps are shown when they limit the selected mode. Settings load only when the dialog opens. Cancel does not write anything; failed reads and saves stay visible and can be retried. The dialog also works from the compact actions drawer (`thread-notifications.tsx`).
 
 | Setting | Values | Effect |
 |---|---|---|

@@ -1,5 +1,11 @@
 // English fallback and Russian translation catalog. User content is never translated.
 export const english = {
+  Уведомления: "Notifications",
+  "Все события": "All activity",
+  "Только запросы ввода": "Needs input only",
+  "Без уведомлений": "Muted",
+  "Ограничено родительским тредом": "Limited by a parent thread",
+  "Ограничено вышестоящим тредом": "Limited by an ancestor thread",
   "Скрыть из дерева": "Hide from the tree",
   "Показать в дереве": "Show in the tree",
   "Показывать скрытые проекты и разделы": "Show hidden projects and sections",

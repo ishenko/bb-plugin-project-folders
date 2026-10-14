@@ -1,6 +1,7 @@
 import { FolderBrowser } from "./folder-browser";
 import { ThreadSectionLabel } from "./thread-section-label";
 import { ThreadStatus } from "./thread-status";
+import { ThreadNotificationsDialog } from "./thread-notifications";
 import {
   MoveDialog,
   PendingMoves,
@@ -1718,6 +1719,7 @@ function ThreadRow({
   const tag = labels.tagOf(thread.id);
   const compact = useIsCompactViewport();
   const [picking, setPicking] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const manageLabels = () => {
     setPicking(false);
     nav.toPluginPanel("folders", { subPath: "settings/tags" });
@@ -1942,6 +1944,10 @@ function ThreadRow({
               {t("Вернуть в рабочую папку")}
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem onSelect={() => setNotificationsOpen(true)}>
+            <Icon name="BellDot" />
+            {t("Уведомления")}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => a.archive(thread.id)}>
             <Icon name="Archive" />
@@ -1956,6 +1962,14 @@ function ThreadRow({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {notificationsOpen && (
+        <ThreadNotificationsDialog
+          threadId={thread.id}
+          title={thread.title || thread.titleFallback || ""}
+          parentThreadId={thread.parentThreadId}
+          onClose={() => setNotificationsOpen(false)}
+        />
+      )}
       {picking && (
         <TagPicker
           threadId={thread.id}
