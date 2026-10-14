@@ -1,8 +1,6 @@
 import { FolderBrowser } from "./folder-browser";
 import { ThreadSectionLabel } from "./thread-section-label";
 import { ThreadStatus } from "./thread-status";
-import { HubProjectTasks } from "./hub-tasks";
-import { HubChatGroups, useHubSidebar } from "./hub-sidebar";
 import {
   MoveDialog,
   PendingMoves,
@@ -1703,9 +1701,6 @@ function ThreadRow({
   onUnplace,
   worksIn,
   onDrag,
-  leading,
-  extraMenuItems,
-  groupTitle,
 }: {
   onMove: (thread: PluginSidebarThread) => void;
   /** Present while the chat is filed somewhere it does not work. */
@@ -1716,9 +1711,6 @@ function ThreadRow({
   thread: PluginSidebarThread;
   active: string | null;
   onNavigate: () => void;
-  leading?: React.ReactNode;
-  extraMenuItems?: React.ReactNode;
-  groupTitle?: string;
 }) {
   const a = experimental_useSidebarThreadActions();
   const nav = useBbNavigate();
@@ -1796,7 +1788,6 @@ function ThreadRow({
         setMenuOpen(true);
       }}
     >
-      {leading}
       {editing ? (
         <Input
           ref={inputRef}
@@ -1829,7 +1820,7 @@ function ThreadRow({
             a.open(thread.id, { split: e.metaKey || e.ctrlKey });
             onNavigate();
           }}
-          title={groupTitle ?? thread.indicatorLabel ?? undefined}
+          title={thread.indicatorLabel ?? undefined}
         >
           <ThreadStatus thread={thread} />
           <span
@@ -1951,7 +1942,6 @@ function ThreadRow({
               {t("Вернуть в рабочую папку")}
             </DropdownMenuItem>
           )}
-          {extraMenuItems ? <><DropdownMenuSeparator />{extraMenuItems}</> : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => a.archive(thread.id)}>
             <Icon name="Archive" />
@@ -2253,7 +2243,6 @@ function Tree(props: PluginThreadListProps) {
   } | null>(null);
   const [regrouping, setRegrouping] = useState<Folder | null>(null);
   const { threads, projects, status } = experimental_useSidebarThreads();
-  const hubSidebar = useHubSidebar(threads);
   const environmentKey = threads.map((t) => t.environment?.id ?? "").join("|");
   useEffect(refresh, [environmentKey, refresh]);
   const actions = experimental_useSidebarThreadActions();
@@ -2504,14 +2493,11 @@ function Tree(props: PluginThreadListProps) {
       sorted.length;
     return (
       <>
-        <HubChatGroups threads={shown} contextThreads={sorted} data={hubSidebar} active={props.activeThreadId} groupId={group} renderThread={(thread, decoration) => (
+        {shown.map((thread) => (
           <ThreadRow
             key={thread.id}
             thread={thread}
             active={props.activeThreadId}
-            leading={decoration?.leading}
-            extraMenuItems={decoration?.menuItems}
-            groupTitle={decoration?.title}
             onNavigate={props.onNavigate}
             onMove={(chat) => {
               setMoveError("");
@@ -2531,7 +2517,7 @@ function Tree(props: PluginThreadListProps) {
               }
             }}
           />
-        )} />
+        ))}
         {hasHidden && (
           <button
             className="pf-show-more"
@@ -4752,7 +4738,6 @@ function Panel({ subPath }: PluginNavPanelProps) {
         <main className="pf-main">
           <PendingMoves />
           <PendingSectionMoves />
-          {sel && selRoot ? <HubProjectTasks key={sel.projectId} projectId={sel.projectId} /> : null}
           {details}
           {!sel && (
             <SettingsPane

@@ -28,17 +28,6 @@ The interface is available in English, Russian, Spanish, French, German, Portugu
 
 See [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
-## Workspace Hub Tasks
+## Workspace Hub Chats
 
-Selecting a project on the management page shows its Hub task tree above the project settings. Parent rows expand to subtasks with statuses, assignees, columns, full child counts, issue links and active-chat actions. Search retains parent context; completed and canceled tasks are hidden by default. The overview refreshes every 15 seconds while visible, on focus and through its refresh action.
-
-The integration calls Hub's versioned, read-only `project_tasks` RPC through the public BB SDK and validates the response. Projects without Hub setup have no task section; an unavailable Hub shows a retryable status without breaking project management. This section supports Russian and English, with English fallback for other locales.
-
-> [!NOTE]
-> Overview payloads contain at most 500 tasks in parent-first order and explicitly label truncation. Counters include all nonarchived tasks across boards, even when filtering or hiding completed tasks. Accepted and canceled tasks are not counted as Done. Opening the full Hub board remains available; this section never starts, moves, accepts or merges tasks.
-
-The Projects sidebar also groups Hub worker chats by task and actual subtask ancestry, including previous attempts. Ordinary chats and existing section placement stay unchanged. The group header is a real direct worker chat: the selected chat for that task, otherwise its first visible chat in the current sorting order. If only child tasks match the chat limit or idle filter, a direct chat from the same section is retained as parent context. It uses the same native row and standard actions as any other chat, with Open in Hub and Expand/Collapse added to its menu. Header chats are never duplicated among descendants or borrowed from another section. When a task has no direct chat in the section, its task-only ancestor retains a Hub link and task menu; no chat actions are attached to a nonexistent chat. Number indicators are not displayed.
-
-Quiet subtasks start collapsed; unread, pinned and busy paths initially expand. An active descendant's ancestor stays open, while a group with its selected chat in the header can collapse without hiding that chat. Disclosure is remembered per section. Existing chat limits and Show all apply before grouping. Thread navigation, rename, pin, read/unread, move, labels, archive, deletion confirmation and drag behavior all use the original native row.
-
-Sidebar metadata uses the optional read-only `sidebar_tasks` RPC in batches of up to 200 thread IDs, with up to 1000 task records and 32 ancestor hops per batch. It refreshes every 15 seconds while visible and on focus. When Hub is unavailable or a chat has no authoritative mapping, its original flat row remains accessible. Only Hub-attributed chats are grouped; task associations are never guessed from titles.
+Hub worker chats use the same flat project and section lists and native actions as other chats. Task trees and subtask progress belong to Workspace Hub; Projects does not fetch or render Hub task metadata.

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeAll, afterEach, expect, it } from "vitest";
+import { beforeAll, afterEach, expect, it, vi } from "vitest";
 import { fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
@@ -59,6 +59,28 @@ const root = {
   name: "Project",
 };
 const folder = { ...root, id: "f1", path: "/work/Section", name: "Section" };
+it("keeps Hub parent and subtask chats flat, with native menus and no Hub RPC calls", async () => {
+  const callRpc = vi.fn(async () => { throw new Error("Hub unavailable"); });
+  const chats = [
+    { ...thread, id: "parent", title: "RIVE-3 parent", originPluginId: "hub" },
+    { ...thread, id: "child", title: "RIVE-3.1 child", originPluginId: "hub" },
+  ];
+  const view = renderSlot(app.threadLists[0]!, { activeThreadId: "parent", onNavigate() {} }, {
+    sidebarThreads: { threads: chats, projects: [] },
+    rpc: { list: () => ({ folders: [], roots: [root], bindings: {}, errors: [] }) },
+    sdk: { plugins: { callRpc } },
+  });
+  await view.findByText("RIVE-3.1 child");
+  expect(view.container.querySelectorAll(".pf-thread")).toHaveLength(2);
+  expect(view.container.querySelector('[aria-label^="Collapse RIVE"]')).toBeNull();
+  const row = view.getByText("RIVE-3 parent").closest(".pf-thread")!;
+  fireEvent.pointerDown(row.querySelector('button[aria-haspopup="menu"]')!, { button: 0, ctrlKey: false });
+  expect(await view.findByRole("menuitem", { name: /^Rename/ })).toBeTruthy();
+  expect(view.getByRole("menuitem", { name: /^Pin/ })).toBeTruthy();
+  expect(view.getByRole("menuitem", { name: /^Archive/ })).toBeTruthy();
+  expect(callRpc).not.toHaveBeenCalled();
+  view.lifecycle.unmount();
+});
 function mount(failMove = false, sidebarThread = thread) {
   return renderSlot(
     app.threadLists[0]!,
