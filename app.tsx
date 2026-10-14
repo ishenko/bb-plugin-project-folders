@@ -1767,6 +1767,7 @@ function ThreadRow({
   return (
     <div
       className={"pf-thread " + (active === thread.id ? "pf-active" : "")}
+      data-sidebar-thread-id={thread.id}
       draggable={!editing}
       onDragStart={(event) => {
         if (menuOpen || editing) {

@@ -84,6 +84,23 @@ function mount(failMove = false) {
     },
   );
 }
+it("exposes the thread ID to both the link and the actions trigger", async () => {
+  const view = mount();
+  const label = await view.findByText("Example chat");
+  const row = label.closest(".pf-thread")!;
+  const trigger = row.querySelector('button[aria-haspopup="menu"]')!;
+  expect(
+    trigger
+      .closest("[data-sidebar-thread-id]")
+      ?.getAttribute("data-sidebar-thread-id"),
+  ).toBe("t1");
+  expect(
+    label
+      .closest("[data-sidebar-thread-id]")
+      ?.getAttribute("data-sidebar-thread-id"),
+  ).toBe("t1");
+  view.lifecycle.unmount();
+});
 it("opens the project menu on right-click with the same actions as the ellipsis", async () => {
   const view = mount();
   fireEvent.contextMenu(await view.findByText("Project"));
