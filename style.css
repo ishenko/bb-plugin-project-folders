@@ -1961,17 +1961,11 @@
   font-size: 10px;
   font-weight: 500;
   line-height: 14px;
-  padding: 0 5px;
+  padding: 1px 6px;
   border-radius: 999px;
   color: var(--pf-c);
   background: color-mix(in srgb, var(--pf-c) 16%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pf-c) 30%, transparent);
-}
-/* Desktop: a little more air above and below the text. */
-@media (min-width: 768px) {
-  .pf-tag-chip {
-    padding: 1px 6px;
-  }
 }
 .pf-compact .pf-tag-chip {
   max-width: 60px;
