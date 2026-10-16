@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useRpc, useRealtime } from "@get-bb/plugin-sdk/app";
 import type { Folder, rpcContract } from "./server";
+import type { ProjectCategory } from "./project-categories";
 export function useTree() {
   const rpc = useRpc<typeof rpcContract>();
   const [data, setData] = useState<{
@@ -11,6 +12,8 @@ export function useTree() {
     places: Record<string, string>;
     errors: string[];
     machines: { id: string; name: string; connected: boolean }[];
+    categories: ProjectCategory[];
+    projectCategories: Record<string, string>;
   }>({
     folders: [],
     roots: [],
@@ -18,6 +21,8 @@ export function useTree() {
     places: {},
     errors: [],
     machines: [],
+    categories: [],
+    projectCategories: {},
   });
   const [error, setError] = useState("");
   const shown = useRef("");
@@ -25,7 +30,12 @@ export function useTree() {
     rpc.call("list").then(
       (d) => {
         // A server that predates hand-filed places simply has none.
-        const next = { ...d, places: d.places ?? {} };
+        const next = {
+          ...d,
+          places: d.places ?? {},
+          categories: d.categories ?? [],
+          projectCategories: d.projectCategories ?? {},
+        };
         // An unchanged answer must not redraw the whole tree.
         const key = JSON.stringify(next);
         if (key !== shown.current) {

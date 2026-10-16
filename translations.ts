@@ -554,4 +554,11 @@ export const english = {
   "Новая метка": "New label",
   "Да, удалить": "Yes, delete",
   "Действия": "Actions",
+  "Категория": "Category",
+  "Новая категория": "New category",
+  "Название категории": "Category name",
+  "Без категории": "No category",
+  "Удалить категорию": "Delete category",
+  "Действия категории": "Category actions",
+  "Проекты не будут удалены.": "Projects will not be deleted.",
 } as const;

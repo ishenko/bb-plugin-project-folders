@@ -23,6 +23,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { makeExportQueue } from "./export-queue";
 import { parseAssignments, parseTags, tagSchema, type Tag } from "./tags";
+import { categoryNameSchema, projectCategorySchema } from "./project-categories";
 import path from "node:path";
 import {
   BACKUP_KIND,
@@ -329,11 +330,36 @@ export const rpcContract = defineRpcContract({
       bindings: z.record(z.string(), z.string()),
       /** Chats placed by hand: thread id to section id, empty for the project root. */
       places: z.record(z.string(), z.string()),
+      categories: z.array(projectCategorySchema),
+      projectCategories: z.record(z.string(), z.string()),
       errors: z.array(z.string()),
       machines: z.array(
         z.object({ id: z.string(), name: z.string(), connected: z.boolean() }),
       ),
     }),
+  },
+  category_save: {
+    input: z
+      .object({
+        id: z.string().min(1).max(64).optional(),
+        name: categoryNameSchema,
+        projectId: z.string().min(1).optional(),
+      })
+      .strict(),
+    output: projectCategorySchema,
+  },
+  category_delete: {
+    input: z.object({ id: z.string().min(1) }).strict(),
+    output: z.object({ ok: z.literal(true) }),
+  },
+  project_category_set: {
+    input: z
+      .object({
+        projectId: z.string().min(1),
+        categoryId: z.string().min(1).nullable(),
+      })
+      .strict(),
+    output: z.object({ ok: z.literal(true) }),
   },
   machines: {
     input: z.null(),
@@ -868,6 +894,8 @@ export default async function plugin(bb: BbPluginApi) {
     `CREATE TABLE github_repos (url TEXT PRIMARY KEY, visibility TEXT NOT NULL, checkedAt INTEGER NOT NULL)`,
     // One-line gists for the chat tooltip; hint is the thread's updatedAt.
     `CREATE TABLE thread_summaries (threadId TEXT PRIMARY KEY, hint TEXT NOT NULL, fingerprint TEXT NOT NULL, summary TEXT, model TEXT, updatedAt INTEGER NOT NULL)`,
+    `CREATE TABLE project_categories (id TEXT PRIMARY KEY, name TEXT NOT NULL, sort INTEGER NOT NULL DEFAULT 0)`,
+    `CREATE TABLE project_category_assignments (projectId TEXT PRIMARY KEY, categoryId TEXT NOT NULL)`,
   ]);
   // Older versions recorded this normal out-of-scope condition as an error.
   // Preserve successful exports, other failures and all project/chat state.
@@ -2301,6 +2329,9 @@ export default async function plugin(bb: BbPluginApi) {
     changed,
   });
   const dropProjectRows = (projectId: string) => {
+    db.prepare(
+      "DELETE FROM project_category_assignments WHERE projectId=?",
+    ).run(projectId);
     db.prepare("DELETE FROM folders WHERE projectId=?").run(projectId);
     db.prepare("DELETE FROM project_order WHERE projectId=?").run(projectId);
     db.prepare("DELETE FROM thread_places WHERE projectId=?").run(projectId);
@@ -2780,6 +2811,20 @@ export default async function plugin(bb: BbPluginApi) {
         roots: listedRoots,
         bindings,
         places,
+        categories: db
+          .prepare(
+            "SELECT id, name FROM project_categories ORDER BY sort, rowid",
+          )
+          .all() as { id: string; name: string }[],
+        projectCategories: Object.fromEntries(
+          (
+            db
+              .prepare(
+                "SELECT a.projectId, a.categoryId FROM project_category_assignments a JOIN project_categories c ON c.id=a.categoryId",
+              )
+              .all() as { projectId: string; categoryId: string }[]
+          ).map((r) => [r.projectId, r.categoryId]),
+        ),
         machines: machines.map((h) => ({
           id: h.id,
           name: h.name,
@@ -3827,6 +3872,78 @@ export default async function plugin(bb: BbPluginApi) {
           tags,
         ),
       };
+    },
+    category_save: async ({ id, name, projectId }) => {
+      if (projectId) {
+        const project = (await bb.sdk.projects.list()).find(
+          (p) => p.id === projectId,
+        );
+        if (!project || project.kind === "personal")
+          throw new Error("Project not found.");
+      }
+      const category = { id: id ?? randomUUID(), name };
+      db.transaction(() => {
+        const categories = db
+          .prepare("SELECT id, name FROM project_categories")
+          .all() as { id: string; name: string }[];
+        if (id && !categories.some((c) => c.id === id))
+          throw new Error("Category not found.");
+        if (
+          categories.some(
+            (c) => c.id !== id && c.name.toLowerCase() === name.toLowerCase(),
+          )
+        )
+          throw new Error("A category with this name already exists.");
+        if (id)
+          db.prepare("UPDATE project_categories SET name=? WHERE id=?").run(
+            name,
+            id,
+          );
+        else
+          db.prepare(
+            "INSERT INTO project_categories (id, name, sort) VALUES (?, ?, (SELECT COALESCE(MAX(sort), -1)+1 FROM project_categories))",
+          ).run(category.id, name);
+        if (projectId)
+          db.prepare(
+            "INSERT INTO project_category_assignments (projectId, categoryId) VALUES (?, ?) ON CONFLICT(projectId) DO UPDATE SET categoryId=excluded.categoryId",
+          ).run(projectId, category.id);
+      })();
+      changed();
+      return category;
+    },
+    category_delete: ({ id }) => {
+      db.transaction(() => {
+        db.prepare(
+          "DELETE FROM project_category_assignments WHERE categoryId=?",
+        ).run(id);
+        db.prepare("DELETE FROM project_categories WHERE id=?").run(id);
+      })();
+      changed();
+      return { ok: true as const };
+    },
+    project_category_set: async ({ projectId, categoryId }) => {
+      const project = (await bb.sdk.projects.list()).find(
+        (p) => p.id === projectId,
+      );
+      if (!project || project.kind === "personal")
+        throw new Error("Project not found.");
+      if (categoryId === null)
+        db.prepare(
+          "DELETE FROM project_category_assignments WHERE projectId=?",
+        ).run(projectId);
+      else {
+        if (
+          !db
+            .prepare("SELECT 1 FROM project_categories WHERE id=?")
+            .get(categoryId)
+        )
+          throw new Error("Category not found.");
+        db.prepare(
+          "INSERT INTO project_category_assignments (projectId, categoryId) VALUES (?, ?) ON CONFLICT(projectId) DO UPDATE SET categoryId=excluded.categoryId",
+        ).run(projectId, categoryId);
+      }
+      changed();
+      return { ok: true as const };
     },
     tag_save: ({ id, name, color }) => {
       const tag: Tag = { id: id ?? randomUUID(), name: name.trim(), color };

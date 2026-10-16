@@ -122,6 +122,7 @@ describe("full backup export and import", () => {
         id: string;
       };
       await call("thread_tag_set", { threadId: "tx", tagId: label.id });
+      await call("category_save", { name: "Clients", projectId: "p1" });
       db.prepare("INSERT INTO folder_archives VALUES (?,?,?)").run(
         "arch-1",
         1_700_000_000_000,

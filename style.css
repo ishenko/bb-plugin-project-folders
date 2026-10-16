@@ -317,6 +317,77 @@
 .pf-project + .pf-project {
   margin-top: 2px;
 }
+.pf-category {
+  margin-block: 6px;
+  min-width: 0;
+}
+.pf-category-heading {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+}
+.pf-category-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  text-align: start;
+  font-size: 11px;
+  font-weight: 600;
+}
+.pf-category-toggle > svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.pf-category-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-category-count {
+  flex: none;
+  margin-inline-start: auto;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.pf-category-unassigned {
+  margin-block: 10px 4px;
+  padding-inline: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+}
+.pf-category-form,
+.pf-category-field {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.pf-category-field {
+  gap: 6px;
+  font-size: 13px;
+}
+.pf-category-form {
+  overflow-wrap: anywhere;
+}
+.pf-category-field select {
+  min-width: 0;
+  width: 100%;
+  height: 36px;
+  padding-inline: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+}
 .pf-children {
   margin-left: 8px;
   padding-left: 10px;

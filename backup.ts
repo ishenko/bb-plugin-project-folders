@@ -18,6 +18,8 @@ export const DURABLE_TABLES = [
   "folder_archives",
   "thread_tags",
   "thread_tag_assignments",
+  "project_categories",
+  "project_category_assignments",
 ] as const;
 export type DurableTable = (typeof DURABLE_TABLES)[number];
 
@@ -50,6 +52,8 @@ export const backupTablesSchema = z.object({
   // Chat labels arrived in 0.6.30-igor.2; older backups have none.
   thread_tags: tableRowsSchema.default([]),
   thread_tag_assignments: tableRowsSchema.default([]),
+  project_categories: tableRowsSchema.default([]),
+  project_category_assignments: tableRowsSchema.default([]),
 });
 
 export const backupPayloadSchema = z.object({
@@ -79,6 +83,8 @@ export const backupImportResultSchema = z.object({
   folder_archives: z.number().int(),
   thread_tags: z.number().int(),
   thread_tag_assignments: z.number().int(),
+  project_categories: z.number().int(),
+  project_category_assignments: z.number().int(),
   settingsNotRestored: z.boolean().optional(),
 });
 export type BackupImportResult = z.infer<typeof backupImportResultSchema>;
@@ -186,6 +192,8 @@ export function importTables(
     folder_archives: 0,
     thread_tags: 0,
     thread_tag_assignments: 0,
+    project_categories: 0,
+    project_category_assignments: 0,
   };
   db.transaction(() => {
     if (mode === "replace")

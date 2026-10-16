@@ -1,4 +1,11 @@
 {
+  "Категория": "Kategorie",
+  "Новая категория": "Neue Kategorie",
+  "Название категории": "Kategoriename",
+  "Без категории": "Ohne Kategorie",
+  "Удалить категорию": "Kategorie löschen",
+  "Действия категории": "Kategorieaktionen",
+  "Проекты не будут удалены.": "Projekte werden nicht gelöscht.",
   "Уведомления": "Benachrichtigungen",
   "Все события": "Alle Aktivitäten",
   "Только запросы ввода": "Nur bei erforderlicher Eingabe",

@@ -205,12 +205,14 @@ export function FolderHeading({
   onArchive,
   hidden = false,
   onToggleHidden,
+  onCategory,
 }: {
   folder: Folder;
   root: boolean;
   /** Hidden from the tree; drawn only while «Show hidden» is on. */
   hidden?: boolean;
   onToggleHidden?: () => void;
+  onCategory?: () => void;
   closed: boolean;
   /** No sections and no chats: nothing to open, so no disclosure chevron. */
   empty?: boolean;
@@ -318,6 +320,12 @@ export function FolderHeading({
             <DropdownMenuItem onSelect={onNewProject}>
               <Icon name="FolderPlus" />
               {t("Новый проект")}
+            </DropdownMenuItem>
+          )}
+          {root && onCategory && (
+            <DropdownMenuItem onSelect={onCategory}>
+              <Icon name="Layers" />
+              {t("Категория")}
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onSelect={onCreate}>

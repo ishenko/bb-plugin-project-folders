@@ -44,6 +44,17 @@ import {
   reparentTargets,
 } from "./tree-model";
 import { useTree } from "./use-tree";
+import {
+  ProjectCategoryTree,
+  ProjectCategoryDialog,
+  type CategoryDialogState,
+} from "./project-categories-ui";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./components/ui/dropdown-menu";
 export function Tree(props: PluginThreadListProps) {
   const language = useLanguage();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -77,6 +88,9 @@ export function Tree(props: PluginThreadListProps) {
   const nav = useBbNavigate();
   const [modal, setModal] = useState<Modal | null>(null);
   const [newProject, setNewProject] = useState(false);
+  const [categoryDialog, setCategoryDialog] =
+    useState<CategoryDialogState | null>(null);
+  const [unrootedMenu, setUnrootedMenu] = useState<string | null>(null);
   const [movingProject, setMovingProject] = useState<Folder | null>(null);
   const [movingSection, setMovingSection] = useState<Folder | null>(null);
   const [movingChat, setMovingChat] = useState<PluginSidebarThread | null>(
@@ -509,6 +523,12 @@ export function Tree(props: PluginThreadListProps) {
             void moveChat(draggedChat, f, root, true);
           }}
           onNewProject={() => setNewProject(true)}
+          onCategory={() =>
+            setCategoryDialog({
+              kind: "assign",
+              project: { id: f.projectId, name: f.name },
+            })
+          }
           onCreate={() =>
             setModal({ action: "create", target, folder: f, level })
           }
@@ -552,6 +572,86 @@ export function Tree(props: PluginThreadListProps) {
       </div>
     );
   };
+  const unrootedProject = (p: (typeof projects)[number]) => {
+    const projectClosed = isProjectClosed(p.id);
+    const projectThreads = threads.filter((t) => t.projectId === p.id);
+    const projectUnread = projectThreads.some(
+      (t) => !t.isArchived && !!t.isUnread,
+    );
+    return (
+      <div className="pf-project" key={p.id}>
+        <div
+          className="pf-heading"
+          onContextMenu={(event) => {
+            if (p.isPersonal) return;
+            event.preventDefault();
+            setUnrootedMenu(p.id);
+          }}
+        >
+          <button
+            className={"pf-label" + (projectUnread ? " pf-unread" : "")}
+            onClick={() => toggle(p.id, projectClosed)}
+          >
+            {projectThreads.length ? (
+              <Icon name={projectClosed ? "ChevronRight" : "ChevronDown"} />
+            ) : (
+              <span className="pf-chevron-spacer" aria-hidden />
+            )}
+            <span>{p.isPersonal ? t("Без проекта") : p.name}</span>
+          </button>
+          <button
+            className="pf-icon"
+            aria-label={t("Новый чат без проекта")}
+            onClick={() => {
+              actions.openNewThread({ projectId: p.id, focusPrompt: true });
+              props.onNavigate();
+            }}
+          >
+            <Icon name="MessageCirclePlus" />
+          </button>
+          {!p.isPersonal && (
+            <DropdownMenu
+              open={unrootedMenu === p.id}
+              onOpenChange={(open) => setUnrootedMenu(open ? p.id : null)}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="pf-icon"
+                  aria-label={`${t("Действия")}: ${p.name}`}
+                >
+                  <Icon name="MoreHorizontal" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={() =>
+                    setCategoryDialog({ kind: "assign", project: p })
+                  }
+                >
+                  <Icon name="Layers" />
+                  {t("Категория")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+        {!projectClosed && (
+          <div className="pf-children">{rows(projectThreads, p.id)}</div>
+        )}
+      </div>
+    );
+  };
+  const projectEntries = [
+    ...visibleRoots.map((f) => ({ id: f.projectId, node: node(f, true) })),
+    ...projects
+      .filter(
+        (p) =>
+          !p.isPersonal &&
+          !data.roots.some((r) => r.projectId === p.id) &&
+          (showHidden || !items[projectKey(p.id)]?.hidden),
+      )
+      .map((p) => ({ id: p.id, node: unrootedProject(p) })),
+  ];
   return (
     <div
       className={
@@ -576,57 +676,39 @@ export function Tree(props: PluginThreadListProps) {
         </p>
       )}
       {status === "loading" && <p>{t("Загрузка…")}</p>}
-      {visibleRoots.map((f) => node(f, true))}
+      <ProjectCategoryTree
+        categories={data.categories}
+        assignments={data.projectCategories}
+        projects={projectEntries}
+        isClosed={(id) => !!collapseRecords[`category:${id}`]?.collapsed}
+        onToggle={(id) =>
+          toggle(
+            `category:${id}`,
+            !!collapseRecords[`category:${id}`]?.collapsed,
+          )
+        }
+        onEdit={setCategoryDialog}
+      />
       {projects
-        .filter((p) => !data.roots.some((r) => r.projectId === p.id))
-        .map((p) => {
-          const projectClosed = isProjectClosed(p.id);
-          const projectThreads = threads.filter((t) => t.projectId === p.id);
-          const projectUnread = projectThreads.some(
-            (t) => !t.isArchived && !!t.isUnread,
-          );
-          return (
-            <div className="pf-project" key={p.id}>
-              <div className="pf-heading">
-                <button
-                  className={"pf-label" + (projectUnread ? " pf-unread" : "")}
-                  onClick={() => toggle(p.id, projectClosed)}
-                >
-                  {projectThreads.length ? (
-                    <Icon
-                      name={projectClosed ? "ChevronRight" : "ChevronDown"}
-                    />
-                  ) : (
-                    <span className="pf-chevron-spacer" aria-hidden />
-                  )}
-                  <span>{p.isPersonal ? t("Без проекта") : p.name}</span>
-                </button>
-                <button
-                  className="pf-icon"
-                  aria-label={t("Новый чат без проекта")}
-                  onClick={() => {
-                    actions.openNewThread({
-                      projectId: p.id,
-                      focusPrompt: true,
-                    });
-                    props.onNavigate();
-                  }}
-                >
-                  <Icon name="MessageCirclePlus" />
-                </button>
-              </div>
-              {!projectClosed && (
-                <div className="pf-children">{rows(projectThreads, p.id)}</div>
-              )}
-            </div>
-          );
-        })}
+        .filter(
+          (p) => p.isPersonal && !data.roots.some((r) => r.projectId === p.id),
+        )
+        .map(unrootedProject)}
       <button
         className="pf-manage"
         onClick={() => nav.toPluginPanel("folders")}
       >
         {t("Управление разделами")}
       </button>
+      {categoryDialog && (
+        <ProjectCategoryDialog
+          state={categoryDialog}
+          categories={data.categories}
+          assignments={data.projectCategories}
+          onClose={() => setCategoryDialog(null)}
+          onSaved={refresh}
+        />
+      )}
       {moveError && !movingChat && (
         <div role="alert" className="pf-error pf-move-notice">
           {moveError}
