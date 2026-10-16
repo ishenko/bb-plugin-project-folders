@@ -88,7 +88,7 @@
   min-height: 32px;
 }
 .pf-tree:not(.pf-compact) .pf-project > .pf-heading:not(.pf-category-heading) {
-  min-height: 36px;
+  min-height: 34px;
 }
 .pf-icon {
   flex: none;
