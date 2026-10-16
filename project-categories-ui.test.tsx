@@ -91,6 +91,11 @@ function setup({ fail = false, stale = false } = {}) {
               id: "personal-chat",
               projectId: "personal",
               title: "Personal chat",
+              isUnread: true,
+              indicator: "none",
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              latestAttentionAt: Date.now(),
             },
           ] as never,
           projects: [
@@ -124,6 +129,7 @@ it("groups projects once, counts source-less projects and remembers category col
   expect(view.queryByText("Source-less")).toBeNull();
   expect(view.getByText("Gamma")).toBeTruthy();
   expect(view.queryByText("No project")).toBeNull();
+  expect(view.getByText("Personal chat")).toBeTruthy();
   view.lifecycle.unmount();
   const next = mount();
   await next.findByRole("button", { name: "Clients", expanded: false });
@@ -134,9 +140,13 @@ it("groups projects once, counts source-less projects and remembers category col
 });
 
 it.each([false, true])(
-  "hides the personal section without hiding source-less projects (compact %s)",
+  "shows personal chats without a section heading even when previously collapsed (compact %s)",
   async (compact) => {
     setCompactViewport(compact);
+    localStorage.setItem(
+      "project-folders:collapsed",
+      JSON.stringify({ personal: { collapsed: true } }),
+    );
     const { view } = setup();
     await view.findByRole("button", { name: "Clients" });
     expect(
@@ -145,7 +155,11 @@ it.each([false, true])(
     expect(
       view.queryByRole("button", { name: "Personal", exact: true }),
     ).toBeNull();
-    expect(view.queryByText("Personal chat")).toBeNull();
+    const chat = view.getByRole("link", { name: /Personal chat/ });
+    expect(chat.getAttribute("href")).toBe("#personal-chat");
+    expect(
+      chat.closest(".pf-project")?.querySelector(".pf-heading"),
+    ).toBeNull();
     expect(view.getByText("Source-less")).toBeTruthy();
     expect(view.getByText("Gamma")).toBeTruthy();
     expect(
