@@ -340,6 +340,9 @@
   align-items: center;
   gap: 2px;
 }
+.pf-category-heading + :is(.pf-category-projects, .pf-children):not(:empty) {
+  margin-block-start: 2px;
+}
 .pf-category-toggle {
   display: flex;
   flex: 1;
