@@ -2,7 +2,7 @@ import { Fragment, useId, useState, type ReactNode } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
 import { groupProjects, type ProjectCategory } from "./project-categories";
-import { t, direction } from "./i18n";
+import { t, direction, useLanguage } from "./i18n";
 import { Icon } from "./components/ui/icon";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -40,6 +40,11 @@ function CategoryGroup({
 }) {
   const contentId = useId();
   const [menuOpen, setMenuOpen] = useState(false);
+  const language = useLanguage();
+  const plural = new Intl.PluralRules(language).select(projects.length);
+  const countLabel = t(
+    plural === "one" ? "проект" : plural === "few" ? "проекта" : "проектов",
+  );
   return (
     <section className="pf-category">
       <div
@@ -50,28 +55,41 @@ function CategoryGroup({
           setMenuOpen(true);
         }}
       >
-        <button
-          type="button"
-          className="pf-category-toggle"
-          aria-label={category.name}
-          aria-expanded={!closed}
-          aria-controls={contentId}
-          onClick={onToggle}
-        >
-          <Icon name={closed ? "ChevronRight" : "ChevronDown"} />
-          <span className="pf-category-name">{category.name}</span>
-          <span className="pf-category-count" aria-hidden>
-            {projects.length}
-          </span>
-        </button>
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="pf-icon"
-              aria-label={`${t("Действия категории")}: ${category.name}`}
+              className="pf-category-toggle"
+              aria-label={category.name}
+              aria-expanded={!closed}
+              aria-controls={contentId}
+              onPointerDown={(event) => {
+                // Keep the menu anchored here without opening it on left click.
+                event.preventDefault();
+                if (event.button === 0) event.currentTarget.focus();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                onToggle();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onToggle();
+                } else if (
+                  event.key === "ContextMenu" ||
+                  (event.shiftKey && event.key === "F10")
+                ) {
+                  event.preventDefault();
+                  setMenuOpen(true);
+                }
+              }}
             >
-              <Icon name="MoreHorizontal" />
+              <Icon name={closed ? "ChevronRight" : "ChevronDown"} />
+              <span className="pf-category-name">{category.name}</span>
+              <span className="pf-category-count" aria-hidden>
+                {projects.length} {countLabel}
+              </span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

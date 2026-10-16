@@ -52,5 +52,5 @@ it("excludes hidden projects and duplicate device roots from category counts", a
   const header = await view.findByRole("button", { name: "Clients" });
   await waitFor(() => expect(view.queryByText("Hidden")).toBeNull());
   expect(view.getAllByText("Visible")).toHaveLength(1);
-  expect(within(header).getByText("1")).toBeTruthy();
+  expect(within(header).getByText("1 project")).toBeTruthy();
 });

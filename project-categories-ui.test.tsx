@@ -105,9 +105,14 @@ it("groups projects once, counts source-less projects and remembers category col
     expanded: true,
   });
   const group = heading.closest(".pf-category")!;
-  expect(within(group as HTMLElement).getByText("3")).toBeTruthy();
+  expect(within(group as HTMLElement).getByText("3 projects")).toBeTruthy();
+  expect(within(heading.parentElement!).getAllByRole("button")).toHaveLength(1);
+  expect(
+    within(view.getByRole("button", { name: "Empty" })).getByText("0 projects"),
+  ).toBeTruthy();
   expect(view.getAllByText("Alpha")).toHaveLength(1);
   fireEvent.click(heading);
+  expect(view.queryByRole("menuitem")).toBeNull();
   expect(view.queryByText("Alpha")).toBeNull();
   expect(view.queryByText("Beta")).toBeNull();
   expect(view.queryByText("Source-less")).toBeNull();
@@ -122,12 +127,64 @@ it("groups projects once, counts source-less projects and remembers category col
   next.lifecycle.unmount();
 });
 
+it.each([false, true])(
+  "opens category actions without toggling (compact %s)",
+  async (compact) => {
+    setCompactViewport(compact);
+    const { view } = setup();
+    const heading = await view.findByRole("button", {
+      name: "Clients",
+      expanded: true,
+    });
+    fireEvent.contextMenu(heading);
+    expect(await view.findByRole("menuitem", { name: "Rename" })).toBeTruthy();
+    expect(heading.getAttribute("aria-expanded")).toBe("true");
+  },
+);
+
+it.each(["ContextMenu", "F10"])(
+  "opens category actions with %s",
+  async (key) => {
+    const { view } = setup();
+    const heading = await view.findByRole("button", { name: "Clients" });
+    fireEvent.keyDown(heading, { key, shiftKey: key === "F10" });
+    expect(await view.findByRole("menuitem", { name: "Rename" })).toBeTruthy();
+  },
+);
+
+it.each([false, true])(
+  "toggles categories with the keyboard without opening actions (compact %s)",
+  async (compact) => {
+    setCompactViewport(compact);
+    const { view } = setup();
+    const heading = await view.findByRole("button", {
+      name: "Clients",
+      expanded: true,
+    });
+    fireEvent.keyDown(heading, { key: "Enter" });
+    expect(heading.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.keyDown(heading, { key: " " });
+    expect(heading.getAttribute("aria-expanded")).toBe("true");
+    expect(view.queryByRole("menuitem")).toBeNull();
+  },
+);
+
 it("does not hide a project whose category disappeared", async () => {
   const { view } = setup({ stale: true });
   const alpha = await view.findByText("Alpha");
   expect(alpha.closest(".pf-category")).toBeNull();
   expect(
     view.getByRole("button", { name: "Empty", expanded: true }),
+  ).toBeTruthy();
+});
+
+it("localizes project counts with Russian plural forms", async () => {
+  localStorage.setItem("project-folders:language", "ru");
+  const { view } = setup();
+  const heading = await view.findByRole("button", { name: "Clients" });
+  expect(within(heading).getByText("3 проекта")).toBeTruthy();
+  expect(
+    within(view.getByRole("button", { name: "Empty" })).getByText("0 проектов"),
   ).toBeTruthy();
 });
 

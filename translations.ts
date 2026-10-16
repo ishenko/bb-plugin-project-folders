@@ -1,5 +1,8 @@
 // English fallback and Russian translation catalog. User content is never translated.
 export const english = {
+  проект: "project",
+  проекта: "projects",
+  проектов: "projects",
   Уведомления: "Notifications",
   "Все события": "All activity",
   "Только запросы ввода": "Needs input only",
