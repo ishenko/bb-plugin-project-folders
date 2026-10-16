@@ -354,6 +354,15 @@
   font-size: 11px;
   font-weight: 600;
 }
+.pf-tree .pf-category-toggle,
+.pf-tree .pf-category-toggle:is(:focus, :focus-visible, :active) {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+.pf-tree .pf-category-toggle:focus-visible {
+  background: var(--accent);
+}
 .pf-category-toggle > svg {
   width: 12px;
   height: 12px;
