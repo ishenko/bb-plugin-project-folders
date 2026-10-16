@@ -98,12 +98,23 @@ export async function githubUrlForPath(folderPath: string): Promise<string | nul
   }
 }
 
+// Anonymous GitHub API calls share 60 per hour per IP. Once spent, wait for
+// the reset instead of turning every repo's visibility into "unknown".
+let rateLimitedUntil = 0;
+export function githubRateLimitedUntil(): number {
+  return rateLimitedUntil;
+}
+export function resetGithubRateLimit(): void {
+  rateLimitedUntil = 0;
+}
+
 /** True when GitHub hides the repo from an anonymous request (private or missing). */
 export async function githubPrivateForUrl(
   url: string,
 ): Promise<boolean | null> {
   const parsed = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/i);
   if (!parsed?.[1] || !parsed[2]) return null;
+  if (Date.now() < rateLimitedUntil) return null;
   try {
     const res = await fetch(
       `https://api.github.com/repos/${parsed[1]}/${parsed[2]}`,
@@ -119,6 +130,16 @@ export async function githubPrivateForUrl(
     );
     if (res.status === 200) return false;
     if (res.status === 404) return true;
+    if (
+      (res.status === 403 || res.status === 429) &&
+      res.headers.get("x-ratelimit-remaining") === "0"
+    ) {
+      const reset = Number(res.headers.get("x-ratelimit-reset"));
+      rateLimitedUntil =
+        Number.isFinite(reset) && reset > 0
+          ? reset * 1000
+          : Date.now() + 60 * 60 * 1000;
+    }
     return null;
   } catch {
     return null;

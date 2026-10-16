@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   githubPrivateForUrl,
+  githubRateLimitedUntil,
+  resetGithubRateLimit,
   githubRemotes,
   githubUrlForPath,
   parseGithubRemote,
@@ -111,5 +113,30 @@ it("treats an anonymous GitHub 404 as private and 200 as public", async () => {
     expect(await githubPrivateForUrl("https://github.com/acme/other")).toBeNull();
   } finally {
     globalThis.fetch = original;
+  }
+});
+
+it("stops asking GitHub until the anonymous rate limit resets", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  const reset = Math.floor(Date.now() / 1000) + 600;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return new Response("rate limited", {
+      status: 403,
+      headers: {
+        "x-ratelimit-remaining": "0",
+        "x-ratelimit-reset": String(reset),
+      },
+    });
+  }) as typeof fetch;
+  try {
+    expect(await githubPrivateForUrl("https://github.com/acme/a")).toBeNull();
+    expect(githubRateLimitedUntil()).toBe(reset * 1000);
+    expect(await githubPrivateForUrl("https://github.com/acme/b")).toBeNull();
+    expect(calls).toBe(1);
+  } finally {
+    globalThis.fetch = original;
+    resetGithubRateLimit();
   }
 });

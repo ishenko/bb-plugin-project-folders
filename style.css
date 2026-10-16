@@ -22,7 +22,7 @@
   gap: 2px;
 }
 .pf-heading {
-  min-height: 36px;
+  min-height: 32px;
 }
 .pf-icon {
   flex: none;
@@ -37,18 +37,70 @@
   width: 18px;
   height: 18px;
 }
+/* The filled mark outweighs the outline icons beside it: keep it small and
+   muted until hovered. Visibility is spelled out in the tooltip. */
 .pf-github {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
+  color: var(--muted-foreground);
+  opacity: 0.7;
+}
+.pf-github:hover,
+.pf-github:focus-visible {
+  background: var(--accent);
+  color: var(--foreground);
+  opacity: 1;
 }
 .pf-github svg {
   width: 14px;
   height: 14px;
 }
-.pf-github-private,
-.pf-github-private svg {
-  color: #111;
+.pf-tooltip {
+  z-index: 60;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: min(400px, calc(100vw - 16px));
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--popover, var(--background));
+  color: var(--popover-foreground, var(--foreground));
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  font-size: 11px;
+  line-height: 16px;
+  animation: pf-tooltip-in 120ms ease-out;
+}
+.pf-tooltip-repo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.pf-tooltip-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Secondary detail as quiet text after a dot, not a pill. */
+.pf-tooltip-meta {
+  flex: none;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pf-tooltip-meta::before {
+  content: "·";
+  margin-inline-end: 6px;
+}
+@keyframes pf-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-tooltip {
+    animation: none;
+  }
 }
 .pf-label {
   display: flex;
@@ -78,15 +130,24 @@
   width: 12px;
   height: 12px;
 }
-.pf-project {
-  margin: 0 0 2px;
+/* Holds the chevron's place on an empty row so names stay aligned. */
+.pf-chevron-spacer {
+  flex: none;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+}
+.pf-label .pf-chevron-spacer.pf-chevron {
+  width: 12px;
+  height: 12px;
+}
+/* One gap between projects, whether a project is collapsed, empty or open. */
+.pf-project + .pf-project {
+  margin-top: 2px;
 }
 .pf-children {
   margin-left: 8px;
   padding-left: 10px;
-}
-.pf-project > .pf-children {
-  padding-bottom: 8px;
 }
 .pf-folder > .pf-children {
   border-left: 1px solid var(--border);
@@ -1194,9 +1255,6 @@
 .pf-compact .pf-thread a {
   padding-top: 3px;
   padding-bottom: 3px;
-}
-.pf-compact .pf-project > .pf-children {
-  padding-bottom: 4px;
 }
 
 .pf-appearance-grid {

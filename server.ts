@@ -1,4 +1,4 @@
-import { githubPrivateForUrl } from "./github-remote";
+import { githubPrivateForUrl, githubRateLimitedUntil } from "./github-remote";
 import { moveHostContract } from "./move-contract";
 import { makeThreadMoves, RELOCATE_MARKER } from "./thread-move";
 import { SECTION_ENVIRONMENT_ID } from "./section-tree";
@@ -324,6 +324,11 @@ export const rpcContract = defineRpcContract({
         z.object({ id: z.string(), name: z.string(), connected: z.boolean() }),
       ),
     }),
+  },
+  /** Disk space of a project or section folder, read lazily for its tooltip. */
+  folder_size: {
+    input: z.object({ hostId: z.string().min(1), path: z.string().min(1) }),
+    output: z.object({ bytes: z.number().nullable() }),
   },
   folder_edit: {
     input: z.object({
@@ -822,6 +827,9 @@ export default async function plugin(bb: BbPluginApi) {
     // Chat labels: names and colors, and at most one label per chat.
     `CREATE TABLE thread_tags (id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL, sort INTEGER NOT NULL DEFAULT 0)`,
     `CREATE TABLE thread_tag_assignments (threadId TEXT PRIMARY KEY, tagId TEXT NOT NULL)`,
+    // Last known repo visibility (1 private, 0 public): survives restarts so
+    // the anonymous GitHub rate limit is not spent again on every reload.
+    `CREATE TABLE github_visibility (url TEXT PRIMARY KEY, private INTEGER NOT NULL, checkedAt INTEGER NOT NULL)`,
   ]);
   // Older versions recorded this normal out-of-scope condition as an error.
   // Preserve successful exports, other failures and all project/chat state.
@@ -961,10 +969,13 @@ export default async function plugin(bb: BbPluginApi) {
     );
   };
   const GITHUB_CACHE_TTL_MS = 6 * 60 * 1000;
-  const githubCache = new Map<
-    string,
-    { url: string | null; private: boolean | null; at: number }
-  >();
+  // Visibility rarely changes; re-check it about once a day.
+  const GITHUB_VISIBILITY_TTL_MS = 24 * 60 * 60 * 1000;
+  const githubCache = new Map<string, { url: string | null; at: number }>();
+  const storedVisibility = (url: string) =>
+    db
+      .prepare("SELECT private, checkedAt FROM github_visibility WHERE url=?")
+      .get(url) as { private: number; checkedAt: number } | undefined;
   const githubRefreshing = new Set<string>();
   let notifyGithubChange = () => {};
   const githubCacheKey = (hostId: string, folderPath: string) =>
@@ -975,10 +986,11 @@ export default async function plugin(bb: BbPluginApi) {
   const withGithubUrl = (f: Folder): Folder => {
     if (isGroup(f)) return { ...f, githubUrl: null, githubPrivate: null };
     const hit = githubCache.get(githubCacheKey(f.hostId, f.path));
+    const known = hit?.url ? storedVisibility(hit.url) : undefined;
     return {
       ...f,
       githubUrl: hit?.url ?? null,
-      githubPrivate: hit?.url ? (hit.private ?? null) : null,
+      githubPrivate: known ? known.private === 1 : null,
     };
   };
   const refreshGithubHost = async (hostId: string, paths: string[]) => {
@@ -993,18 +1005,14 @@ export default async function plugin(bb: BbPluginApi) {
         seen.add(row.path);
         const key = githubCacheKey(hostId, row.path);
         const prev = githubCache.get(key);
-        githubCache.set(key, {
-          url: row.url,
-          private: prev?.url === row.url ? (prev.private ?? null) : null,
-          at: now,
-        });
+        githubCache.set(key, { url: row.url, at: now });
         if (prev?.url !== row.url) dirty = true;
       }
       for (const folderPath of paths) {
         if (seen.has(folderPath)) continue;
         const key = githubCacheKey(hostId, folderPath);
         const prev = githubCache.get(key);
-        githubCache.set(key, { url: null, private: null, at: now });
+        githubCache.set(key, { url: null, at: now });
         if (prev?.url) dirty = true;
       }
       if (!process.env.VITEST) {
@@ -1014,23 +1022,45 @@ export default async function plugin(bb: BbPluginApi) {
               .map((hit) => hit.url)
               .filter((url): url is string => !!url),
           ),
-        ];
-        await Promise.all(
-          urls.map(async (url) => {
-            const hidden = await githubPrivateForUrl(url);
-            if (hidden == null) return;
-            for (const [key, hit] of githubCache) {
-              if (hit.url !== url || hit.private === hidden) continue;
-              githubCache.set(key, { ...hit, private: hidden });
-              dirty = true;
-            }
-          }),
-        );
+        ].filter((url) => {
+          const known = storedVisibility(url);
+          return !known || now - known.checkedAt > GITHUB_VISIBILITY_TTL_MS;
+        });
+        // One at a time: a spent rate limit stops the rest without a request each.
+        for (const url of urls) {
+          if (Date.now() < githubRateLimitedUntil()) break;
+          const hidden = await githubPrivateForUrl(url);
+          if (hidden == null) continue;
+          const prev = storedVisibility(url);
+          db.prepare(
+            "INSERT INTO github_visibility (url, private, checkedAt) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET private=excluded.private, checkedAt=excluded.checkedAt",
+          ).run(url, hidden ? 1 : 0, Date.now());
+          if (prev?.private !== (hidden ? 1 : 0)) dirty = true;
+        }
       }
     } catch {
       /* list must stay available when a host read fails */
     }
     return dirty;
+  };
+  // `du` over a big checkout takes seconds: one read per folder at a time,
+  // reused for a while so hovering back and forth stays instant.
+  const SIZE_CACHE_TTL_MS = 10 * 60 * 1000;
+  const sizeCache = new Map<
+    string,
+    { bytes: Promise<number | null>; at: number }
+  >();
+  const folderSizeOf = (hostId: string, folderPath: string) => {
+    const key = githubCacheKey(hostId, folderPath);
+    const hit = sizeCache.get(key);
+    if (hit && Date.now() - hit.at < SIZE_CACHE_TTL_MS) return hit.bytes;
+    const bytes = bb.hosts
+      .experimental_client({ contract: moveHostContract })
+      .call("folder_size", { path: folderPath }, { hostId })
+      .then((r) => r.bytes);
+    sizeCache.set(key, { bytes, at: Date.now() });
+    bytes.catch(() => sizeCache.delete(key));
+    return bytes;
   };
   const scheduleGithubRefresh = (connected: Set<string>, items: Folder[]) => {
     const byHost = new Map<string, string[]>();
@@ -2643,6 +2673,27 @@ export default async function plugin(bb: BbPluginApi) {
       return bb.hosts
         .experimental_client({ contract: moveHostContract })
         .call("folder_edit", { ...input, protectedPaths }, { hostId: host.id });
+    },
+    folder_size: async ({ hostId, path: folderPath }) => {
+      // Only folders the tree shows: not a way to measure any path on a device.
+      const known =
+        folders().some(
+          (f) =>
+            !isGroup(f) &&
+            ((f.hostId === hostId && f.path === folderPath) ||
+              pathsOf(f.id).some(
+                (r) => r.hostId === hostId && r.path === folderPath,
+              )),
+        ) ||
+        (await roots()).some(
+          (r) => r.hostId === hostId && r.path === folderPath,
+        );
+      if (!known) throw new Error("Unknown folder.");
+      const host = (await bb.sdk.hosts.list()).find(
+        (h) => h.id === hostId && h.status === "connected",
+      );
+      if (!host) throw new Error("The device is offline.");
+      return { bytes: await folderSizeOf(hostId, folderPath) };
     },
     project_browse: async (input) => {
       const h = (await bb.sdk.hosts.list()).find(

@@ -45,6 +45,10 @@ export const moveHostContract = defineRpcContract({
     input: sessionInventoryInput,
     output: sessionInventoryOutput,
   },
+  folder_size: {
+    input: z.object({ path: z.string().min(1) }).strict(),
+    output: z.object({ bytes: z.number().nullable() }),
+  },
   github_remotes: {
     input: z.object({ paths: z.array(z.string()) }).strict(),
     output: z.object({

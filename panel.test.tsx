@@ -831,6 +831,36 @@ it("loads the rules of a card opened by deep link, before the tree arrives", asy
   view.lifecycle.unmount();
 });
 
+it("drops the chevron on empty rows and shows path and disk size on hover", async () => {
+  const view = renderSlot(
+    app.threadLists[0]!,
+    { activeThreadId: null, onNavigate() {} },
+    {
+      sidebarThreads: { threads: [], projects: [] },
+      rpc: {
+        ...rpc,
+        folder_size: () => ({ bytes: 1.5 * 1024 * 1024 * 1024 }),
+      },
+    },
+  );
+  const label = (await view.findByText("Section")).closest("button")!;
+  expect(label.querySelector(".pf-chevron-spacer")).toBeTruthy();
+  const project = view.getByText("Project").closest("button")!;
+  expect(project.querySelector(".pf-chevron-spacer")).toBeNull();
+  expect(project.querySelector("svg.pf-chevron")).toBeTruthy();
+  fireEvent.focus(label);
+  await waitFor(() =>
+    expect(
+      view.baseElement.querySelector(".pf-tooltip .pf-tooltip-meta")
+        ?.textContent,
+    ).toBe("1.5 GB"),
+  );
+  expect(
+    view.baseElement.querySelector(".pf-tooltip .pf-tooltip-path")?.textContent,
+  ).toBe("/work/Section");
+  view.lifecycle.unmount();
+});
+
 it("shows a GitHub icon left of new-chat only when githubUrl is set", async () => {
   const withRepo = {
     ...section,
@@ -888,5 +918,15 @@ it("shows a GitHub icon left of new-chat only when githubUrl is set", async () =
   expect(view.baseElement.querySelectorAll("a.pf-icon")).toHaveLength(1);
   expect(view.getByText("Group")).toBeTruthy();
   expect(view.getByText("Plain")).toBeTruthy();
+  fireEvent.focus(link as HTMLElement);
+  const tip = await waitFor(() => {
+    const node = view.baseElement.querySelector(".pf-tooltip");
+    expect(node).toBeTruthy();
+    return node!;
+  });
+  expect(tip.querySelector(".pf-tooltip-repo")?.textContent).toBe(
+    "VKirill/bb-plugin-project-folders",
+  );
+  expect(tip.querySelector(".pf-tooltip-meta")?.textContent).toBe("Private");
   view.lifecycle.unmount();
 });

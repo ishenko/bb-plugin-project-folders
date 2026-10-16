@@ -2354,6 +2354,46 @@ it("keeps chats on the parent when a child shares its folder", async () => {
   }
 });
 
+describe("folder_size", () => {
+  it("measures a known folder once per TTL and refuses other paths", async () => {
+    const sizes: string[] = [];
+    const h = createFakePluginHost({
+      pluginId: "project-folders",
+      agentSkillIds: ["project-folders"],
+      experimental_hostEntry: true,
+      experimental_callHostRpc: async (call) => {
+        if (call.method !== "folder_size")
+          throw new Error(`unexpected ${call.method}`);
+        sizes.push((call.input as { path: string }).path);
+        return { bytes: 5 * 1024 * 1024 };
+      },
+      sdk: {
+        projects: { list: async () => [root] as never },
+        hosts: {
+          list: async () =>
+            [{ id: "h1", name: "Mac", status: "connected" }] as never,
+        },
+        environments: { list: async () => [] },
+      },
+    });
+    await plugin(h.bb);
+    const call = h.harness.behavior.callRpc;
+    try {
+      expect(
+        await call("folder_size", { hostId: "h1", path: "/work" }),
+      ).toEqual({ bytes: 5 * 1024 * 1024 });
+      await call("folder_size", { hostId: "h1", path: "/work" });
+      expect(sizes).toEqual(["/work"]);
+      await expect(
+        call("folder_size", { hostId: "h1", path: "/etc" }),
+      ).rejects.toThrow("Unknown folder.");
+      expect(sizes).toEqual(["/work"]);
+    } finally {
+      await h.harness.lifecycle.dispose();
+    }
+  });
+});
+
 describe("githubUrl on list", () => {
   type Listed = {
     folders: { path: string; kind?: string; githubUrl: string | null }[];

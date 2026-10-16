@@ -2,7 +2,7 @@
 title: Personal Projects & Sections fork
 status: active
 owner: Igor
-updated: 2026-10-14
+updated: 2026-10-16
 tags: [bb, plugin, fork]
 ---
 
@@ -30,6 +30,9 @@ tags: [bb, plugin, fork]
 | Existing diagnostic rows | At plugin startup, remove only the exact legacy unregistered-folder error with a null export path. Preserve successful export records, other errors and all project/chat state. |
 | Chat labels | Settings → «Метки чатов» defines labels (name + color). Chat menu ⋯ → «Метка» sets one label per chat, shown as a compact chip after the title. Tables `thread_tags` / `thread_tag_assignments`, included in the full backup. |
 | BB SDK compatibility | Pin SDK 0.6.15; use current composer hooks and methods. Preserve provider-defined service tier strings. |
+| Tree spacing | One 2px gap between projects whether collapsed, empty or open; 32px headings. Empty projects and sections show no disclosure chevron (a spacer keeps names aligned). |
+| GitHub mark | Round, muted GitHub logo in the standard 28×28 icon area. Tooltip shows `owner/repo · Private/Public`. Visibility is persisted in `github_visibility` (transient, not in backups) and re-checked daily. |
+| Folder tooltip | Hovering a project or section name shows its path and, read lazily on that machine with `du`, its disk size (host RPC `folder_size`, only for folders in the tree, cached 10 min). |
 
 The dependency lockfile also advances `source-map-js` to its compatible patched release; `npm audit` reports zero vulnerabilities at verification time.
 

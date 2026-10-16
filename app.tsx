@@ -1996,10 +1996,83 @@ function ThreadRow({
     </div>
   );
 }
+function formatBytes(bytes: number, language: string): string {
+  const units = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return new Intl.NumberFormat(language, {
+    style: "unit",
+    unit: units[unit],
+    unitDisplay: "short",
+    maximumFractionDigits: unit > 0 && value < 10 ? 1 : 0,
+  }).format(value);
+}
+/** The folder's path and, read when the tooltip opens, the space it takes on disk. */
+function FolderPathTip({
+  folder,
+  children,
+}: {
+  folder: Folder;
+  children: React.ReactElement;
+}) {
+  const rpc = useRpc<typeof rpcContract>();
+  const language = useLanguage();
+  const key = `${folder.hostId}\0${folder.path}`;
+  const [size, setSize] = useState<{ key: string; bytes: number | null }>();
+  const [loading, setLoading] = useState(false);
+  const shown = size?.key === key ? size : undefined;
+  return (
+    <TooltipProvider delayDuration={500}>
+      <Tooltip
+        onOpenChange={(open) => {
+          if (!open) return;
+          setLoading(true);
+          rpc
+            .call("folder_size", { hostId: folder.hostId, path: folder.path })
+            .then(
+              (r) => setSize({ key, bytes: r.bytes }),
+              () => setSize({ key, bytes: null }),
+            )
+            .finally(() => setLoading(false));
+        }}
+      >
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipPortal>
+          <TooltipContent
+            className="pf-tooltip"
+            side="bottom"
+            align="start"
+            sideOffset={2}
+            collisionPadding={8}
+          >
+            <span className="pf-tooltip-path">{folder.path}</span>
+            {shown?.bytes != null ? (
+              <span className="pf-tooltip-meta">
+                {formatBytes(shown.bytes, language)}
+              </span>
+            ) : (
+              loading &&
+              !shown && (
+                <span className="pf-tooltip-meta" aria-label={t("Загрузка…")}>
+                  …
+                </span>
+              )
+            )}
+          </TooltipContent>
+        </TooltipPortal>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 function FolderHeading({
   folder,
   root,
   closed,
+  empty = false,
   unread = false,
   highlighted,
   refused = false,
@@ -2034,6 +2107,8 @@ function FolderHeading({
   hidden?: boolean;
   onToggleHidden?: () => void;
   closed: boolean;
+  /** No sections and no chats: nothing to open, so no disclosure chevron. */
+  empty?: boolean;
   unread?: boolean;
   highlighted: boolean;
   /** The highlighted row refuses this chat: shown, but not as a promise. */
@@ -2086,19 +2161,31 @@ function FolderHeading({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <button
-        className={"pf-label" + (unread ? " pf-unread" : "")}
-        onClick={onToggle}
-        title={folder.path}
-      >
-        <Icon
-          name={closed ? "ChevronRight" : "ChevronDown"}
-          className="pf-chevron"
-        />
-        <Glyph {...look} />
-        <span>{folder.name}</span>
-        {device && <span className="pf-host-badge">{device}</span>}
-      </button>
+      {(() => {
+        const label = (
+          <button
+            className={"pf-label" + (unread ? " pf-unread" : "")}
+            onClick={onToggle}
+          >
+            {empty ? (
+              <span className="pf-chevron pf-chevron-spacer" aria-hidden />
+            ) : (
+              <Icon
+                name={closed ? "ChevronRight" : "ChevronDown"}
+                className="pf-chevron"
+              />
+            )}
+            <Glyph {...look} />
+            <span>{folder.name}</span>
+            {device && <span className="pf-host-badge">{device}</span>}
+          </button>
+        );
+        return group ? (
+          label
+        ) : (
+          <FolderPathTip folder={folder}>{label}</FolderPathTip>
+        );
+      })()}
       {!group && folder.githubUrl && (
         <TooltipProvider delayDuration={300}>
           <Tooltip>
@@ -2119,14 +2206,27 @@ function FolderHeading({
                 }
                 onClick={(event) => event.stopPropagation()}
               >
-                <Icon name="Github" />
+                <Icon name="GithubLogo" />
               </a>
             </TooltipTrigger>
             <TooltipPortal>
-              <TooltipContent>
-                {folder.githubPrivate
-                  ? t("Приватный репозиторий GitHub")
-                  : folder.githubUrl}
+              <TooltipContent
+                className="pf-tooltip"
+                side="bottom"
+                align="end"
+                sideOffset={4}
+                collisionPadding={8}
+              >
+                <span className="pf-tooltip-repo">
+                  {folder.githubUrl.replace(/^https:\/\/github\.com\//i, "")}
+                </span>
+                {/* GitHub's own visibility labels, untranslated as on github.com;
+                    null means the visibility could not be checked. */}
+                {folder.githubPrivate != null && (
+                  <span className="pf-tooltip-meta">
+                    {folder.githubPrivate ? "Private" : "Public"}
+                  </span>
+                )}
               </TooltipContent>
             </TooltipPortal>
           </Tooltip>
@@ -2628,6 +2728,7 @@ function Tree(props: PluginThreadListProps) {
           hidden={isHidden(f, root)}
           onToggleHidden={() => toggleHidden(f, root)}
           closed={folderClosed}
+          empty={!children.length && !ts.length}
           unread={folderUnread && listSettings.boldUnread}
           highlighted={dropTarget === f.id}
           refused={dropTarget === f.id && !!dropReason}
@@ -2773,8 +2874,9 @@ function Tree(props: PluginThreadListProps) {
         .filter((p) => !data.roots.some((r) => r.projectId === p.id))
         .map((p) => {
           const projectClosed = isProjectClosed(p.id);
-          const projectUnread = threads.some(
-            (t) => t.projectId === p.id && !t.isArchived && !!t.isUnread,
+          const projectThreads = threads.filter((t) => t.projectId === p.id);
+          const projectUnread = projectThreads.some(
+            (t) => !t.isArchived && !!t.isUnread,
           );
           return (
             <div className="pf-project" key={p.id}>
@@ -2783,7 +2885,13 @@ function Tree(props: PluginThreadListProps) {
                   className={"pf-label" + (projectUnread ? " pf-unread" : "")}
                   onClick={() => toggle(p.id, projectClosed)}
                 >
-                  <Icon name={projectClosed ? "ChevronRight" : "ChevronDown"} />
+                  {projectThreads.length ? (
+                    <Icon
+                      name={projectClosed ? "ChevronRight" : "ChevronDown"}
+                    />
+                  ) : (
+                    <span className="pf-chevron-spacer" aria-hidden />
+                  )}
                   <span>{p.isPersonal ? t("Без проекта") : p.name}</span>
                 </button>
                 <button
@@ -2801,12 +2909,7 @@ function Tree(props: PluginThreadListProps) {
                 </button>
               </div>
               {!projectClosed && (
-                <div className="pf-children">
-                  {rows(
-                    threads.filter((t) => t.projectId === p.id),
-                    p.id,
-                  )}
-                </div>
+                <div className="pf-children">{rows(projectThreads, p.id)}</div>
               )}
             </div>
           );

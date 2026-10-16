@@ -27,6 +27,7 @@ export const TRANSIENT_TABLES = [
   "project_moves",
   "thread_moves",
   "section_moves",
+  "github_visibility",
 ] as const;
 
 const cellSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
