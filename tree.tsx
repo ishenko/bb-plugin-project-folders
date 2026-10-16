@@ -693,14 +693,7 @@ export function Tree(props: PluginThreadListProps) {
         .filter(
           (p) => p.isPersonal && !data.roots.some((r) => r.projectId === p.id),
         )
-        .map((p) => (
-          <div className="pf-project" key={p.id}>
-            {rows(
-              threads.filter((thread) => thread.projectId === p.id),
-              p.id,
-            )}
-          </div>
-        ))}
+        .map(unrootedProject)}
       <button
         className="pf-manage"
         onClick={() => nav.toPluginPanel("folders")}

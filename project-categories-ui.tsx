@@ -151,9 +151,6 @@ export function ProjectCategoryTree({
           onEdit={onEdit}
         />
       ))}
-      {categories.length > 0 && unassigned.length > 0 && (
-        <div className="pf-category-unassigned">{t("Без категории")}</div>
-      )}
       {unassigned.map((project) => (
         <Fragment key={project.id}>{project.node}</Fragment>
       ))}

@@ -128,7 +128,8 @@ it("groups projects once, counts source-less projects and remembers category col
   expect(view.queryByText("Beta")).toBeNull();
   expect(view.queryByText("Source-less")).toBeNull();
   expect(view.getByText("Gamma")).toBeTruthy();
-  expect(view.queryByText("No project")).toBeNull();
+  expect(view.getByText("No project")).toBeTruthy();
+  expect(view.queryByText("No category")).toBeNull();
   expect(view.getByText("Personal chat")).toBeTruthy();
   view.lifecycle.unmount();
   const next = mount();
@@ -140,18 +141,15 @@ it("groups projects once, counts source-less projects and remembers category col
 });
 
 it.each([false, true])(
-  "shows personal chats without a section heading even when previously collapsed (compact %s)",
+  "omits the unassigned category label but keeps the personal heading and chats (compact %s)",
   async (compact) => {
     setCompactViewport(compact);
-    localStorage.setItem(
-      "project-folders:collapsed",
-      JSON.stringify({ personal: { collapsed: true } }),
-    );
     const { view } = setup();
     await view.findByRole("button", { name: "Clients" });
+    expect(view.queryByText("No category")).toBeNull();
     expect(
-      view.queryByRole("button", { name: "No project", exact: true }),
-    ).toBeNull();
+      view.getByRole("button", { name: "No project", exact: true }),
+    ).toBeTruthy();
     expect(
       view.queryByRole("button", { name: "Personal", exact: true }),
     ).toBeNull();
@@ -159,12 +157,20 @@ it.each([false, true])(
     expect(chat.getAttribute("href")).toBe("#personal-chat");
     expect(
       chat.closest(".pf-project")?.querySelector(".pf-heading"),
-    ).toBeNull();
+    ).toBeTruthy();
     expect(view.getByText("Source-less")).toBeTruthy();
     expect(view.getByText("Gamma")).toBeTruthy();
     expect(
       view.getByRole("button", { name: "New chat", exact: true }),
     ).toBeTruthy();
+    fireEvent.click(
+      view.getByRole("button", { name: "No project", exact: true }),
+    );
+    expect(view.queryByText("Personal chat")).toBeNull();
+    fireEvent.click(
+      view.getByRole("button", { name: "No project", exact: true }),
+    );
+    expect(view.getByText("Personal chat")).toBeTruthy();
   },
 );
 
