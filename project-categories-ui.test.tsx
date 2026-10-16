@@ -157,9 +157,16 @@ it.each([false, true])(
     const { view } = setup();
     await view.findByRole("button", { name: "Clients" });
     expect(view.queryByText("No category")).toBeNull();
-    expect(
-      view.getByRole("button", { name: "No project", exact: true }),
-    ).toBeTruthy();
+    const personal = view.getByRole("button", {
+      name: "No project",
+      exact: true,
+    });
+    expect(personal.classList.contains("pf-category-toggle")).toBe(true);
+    expect(personal.getAttribute("aria-expanded")).toBe("true");
+    const personalName = within(personal).getByText("No project");
+    expect(personalName.nextElementSibling?.getAttribute("data-icon")).toBe(
+      "ChevronDown",
+    );
     expect(
       view.queryByRole("button", { name: "Personal", exact: true }),
     ).toBeNull();
@@ -177,6 +184,10 @@ it.each([false, true])(
       view.getByRole("button", { name: "No project", exact: true }),
     );
     expect(view.queryByText("Personal chat")).toBeNull();
+    expect(personal.getAttribute("aria-expanded")).toBe("false");
+    expect(personalName.nextElementSibling?.getAttribute("data-icon")).toBe(
+      "ChevronRight",
+    );
     fireEvent.click(
       view.getByRole("button", { name: "No project", exact: true }),
     );

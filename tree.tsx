@@ -579,9 +579,14 @@ export function Tree(props: PluginThreadListProps) {
       (t) => !t.isArchived && !!t.isUnread,
     );
     return (
-      <div className="pf-project" key={p.id}>
+      <div
+        className={"pf-project" + (p.isPersonal ? " pf-category" : "")}
+        key={p.id}
+      >
         <div
-          className="pf-heading"
+          className={
+            "pf-heading" + (p.isPersonal ? " pf-category-heading" : "")
+          }
           onContextMenu={(event) => {
             if (p.isPersonal) return;
             event.preventDefault();
@@ -589,15 +594,30 @@ export function Tree(props: PluginThreadListProps) {
           }}
         >
           <button
-            className={"pf-label" + (projectUnread ? " pf-unread" : "")}
+            type="button"
+            className={
+              p.isPersonal
+                ? "pf-category-toggle"
+                : "pf-label" + (projectUnread ? " pf-unread" : "")
+            }
+            aria-expanded={p.isPersonal ? !projectClosed : undefined}
             onClick={() => toggle(p.id, projectClosed)}
           >
-            {projectThreads.length ? (
-              <Icon name={projectClosed ? "ChevronRight" : "ChevronDown"} />
+            {p.isPersonal ? (
+              <>
+                <span className="pf-category-name">{t("Без проекта")}</span>
+                <Icon name={projectClosed ? "ChevronRight" : "ChevronDown"} />
+              </>
             ) : (
-              <span className="pf-chevron-spacer" aria-hidden />
+              <>
+                {projectThreads.length ? (
+                  <Icon name={projectClosed ? "ChevronRight" : "ChevronDown"} />
+                ) : (
+                  <span className="pf-chevron-spacer" aria-hidden />
+                )}
+                <span>{p.name}</span>
+              </>
             )}
-            <span>{p.isPersonal ? t("Без проекта") : p.name}</span>
           </button>
           <button
             className="pf-icon"

@@ -83,7 +83,8 @@
   align-items: center;
   gap: 2px;
 }
-.pf-heading {
+.pf-heading,
+.pf-category-heading {
   min-height: 32px;
 }
 .pf-icon {
@@ -325,7 +326,6 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  min-height: 30px;
 }
 .pf-category-toggle {
   display: flex;
@@ -333,7 +333,7 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
-  min-height: 28px;
+  min-height: inherit;
   padding: 4px 6px;
   border-radius: 6px;
   color: var(--muted-foreground);
@@ -1489,7 +1489,8 @@
 .pf-tree .pf-children {
   margin-left: var(--pf-indent, 8px);
 }
-.pf-compact .pf-heading {
+.pf-compact .pf-heading,
+.pf-compact .pf-category-heading {
   min-height: 28px;
 }
 .pf-compact .pf-thread {
