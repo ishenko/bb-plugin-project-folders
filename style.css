@@ -4,6 +4,15 @@
 }
 .pf-tree {
   padding: 8px 12px 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+.pf-tree :is(button, a):focus {
+  outline: none;
+  box-shadow: none;
+}
+.pf-tree :is(button, a):focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--muted-foreground) 45%, transparent);
+  outline-offset: -2px;
 }
 .pf-tree button {
   cursor: pointer;
@@ -358,8 +367,8 @@
 }
 .pf-category-mark {
   flex: none;
-  width: 16px;
-  height: 2px;
+  width: 2px;
+  height: 16px;
   border-radius: 1px;
 }
 .pf-category-count {

@@ -13,7 +13,14 @@ import {
   sortFoldersByActivity,
 } from "./chat-list";
 import { t, useLanguage, direction } from "./i18n";
-import { useCallback, useEffect, useState, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useRef,
+} from "react";
+import { reserveTreeScrollGutter } from "./tree-scroll";
 import {
   useBbNavigate,
   experimental_useSidebarThreads,
@@ -56,6 +63,10 @@ import {
   DropdownMenuItem,
 } from "./components/ui/dropdown-menu";
 export function Tree(props: PluginThreadListProps) {
+  const treeRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (treeRef.current) return reserveTreeScrollGutter(treeRef.current);
+  }, []);
   const language = useLanguage();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const { rpc, data, error, refresh } = useTree();
@@ -674,6 +685,7 @@ export function Tree(props: PluginThreadListProps) {
   ];
   return (
     <div
+      ref={treeRef}
       className={
         "pf pf-tree" + (prefs.view.density === "compact" ? " pf-compact" : "")
       }
@@ -700,6 +712,10 @@ export function Tree(props: PluginThreadListProps) {
         categories={data.categories}
         assignments={data.projectCategories}
         projects={projectEntries}
+        activeProjectId={
+          threads.find((thread) => thread.id === props.activeThreadId)
+            ?.projectId
+        }
         isClosed={(id) => !!collapseRecords[`category:${id}`]?.collapsed}
         onToggle={(id) =>
           toggle(

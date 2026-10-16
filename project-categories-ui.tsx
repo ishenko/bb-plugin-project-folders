@@ -31,15 +31,54 @@ export type CategoryDialogState =
   | { kind: "assign"; project: { id: string; name: string } }
   | { kind: "rename" | "settings" | "delete"; category: ProjectCategory };
 
+function ProjectList({
+  projects,
+  activeProjectId,
+  closed = false,
+}: {
+  projects: { id: string; node: ReactNode }[];
+  activeProjectId?: string | null;
+  closed?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  useLanguage();
+  if (closed) return null;
+  const preview = projects.filter(
+    (project, index) => index < 10 || project.id === activeProjectId,
+  );
+  return (
+    <>
+      {(expanded ? projects : preview).map((project) => (
+        <Fragment key={project.id}>{project.node}</Fragment>
+      ))}
+      {preview.length < projects.length && (
+        <button
+          type="button"
+          className="pf-show-more"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <Icon name={expanded ? "ChevronUp" : "ChevronDown"} />
+          {expanded
+            ? t("Свернуть список")
+            : `${t("Показать все")} (${projects.length})`}
+        </button>
+      )}
+    </>
+  );
+}
+
 function CategoryGroup({
   category,
   projects,
+  activeProjectId,
   closed,
   onToggle,
   onEdit,
 }: {
   category: ProjectCategory;
   projects: { id: string; node: ReactNode }[];
+  activeProjectId?: string | null;
   closed: boolean;
   onToggle: () => void;
   onEdit: (state: CategoryDialogState) => void;
@@ -131,10 +170,11 @@ function CategoryGroup({
         </DropdownMenu>
       </div>
       <div id={contentId} hidden={closed} className="pf-category-projects">
-        {!closed &&
-          projects.map((project) => (
-            <Fragment key={project.id}>{project.node}</Fragment>
-          ))}
+        <ProjectList
+          projects={projects}
+          activeProjectId={activeProjectId}
+          closed={closed}
+        />
       </div>
     </section>
   );
@@ -144,6 +184,7 @@ export function ProjectCategoryTree({
   categories,
   assignments,
   projects,
+  activeProjectId,
   isClosed,
   onToggle,
   onEdit,
@@ -151,6 +192,7 @@ export function ProjectCategoryTree({
   categories: ProjectCategory[];
   assignments: Record<string, string>;
   projects: { id: string; node: ReactNode }[];
+  activeProjectId?: string | null;
   isClosed: (id: string) => boolean;
   onToggle: (id: string) => void;
   onEdit: (state: CategoryDialogState) => void;
@@ -167,14 +209,13 @@ export function ProjectCategoryTree({
           key={category.id}
           category={category}
           projects={projects}
+          activeProjectId={activeProjectId}
           closed={isClosed(category.id)}
           onToggle={() => onToggle(category.id)}
           onEdit={onEdit}
         />
       ))}
-      {unassigned.map((project) => (
-        <Fragment key={project.id}>{project.node}</Fragment>
-      ))}
+      <ProjectList projects={unassigned} activeProjectId={activeProjectId} />
     </>
   );
 }
