@@ -87,8 +87,9 @@
 .pf-category-heading {
   min-height: 32px;
 }
-.pf-tree:not(.pf-compact) .pf-project > .pf-heading:not(.pf-category-heading) {
-  min-height: 34px;
+.pf-tree:not(.pf-compact) .pf-project > .pf-heading,
+.pf-tree:not(.pf-compact) .pf-category-heading {
+  min-height: 36px;
 }
 .pf-icon {
   flex: none;
