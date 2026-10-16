@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { colorValue } from "./preferences";
+
+export const DEFAULT_CATEGORY_COLOR = "gray";
 
 export const categoryNameSchema = z
   .string()
@@ -9,6 +12,7 @@ export const categoryNameSchema = z
 export const projectCategorySchema = z.object({
   id: z.string().min(1).max(64),
   name: categoryNameSchema,
+  color: colorValue.optional(),
 });
 export type ProjectCategory = z.infer<typeof projectCategorySchema>;
 

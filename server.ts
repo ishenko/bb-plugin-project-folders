@@ -23,7 +23,12 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { makeExportQueue } from "./export-queue";
 import { parseAssignments, parseTags, tagSchema, type Tag } from "./tags";
-import { categoryNameSchema, projectCategorySchema } from "./project-categories";
+import {
+  categoryNameSchema,
+  projectCategorySchema,
+  DEFAULT_CATEGORY_COLOR,
+  type ProjectCategory,
+} from "./project-categories";
 import path from "node:path";
 import {
   BACKUP_KIND,
@@ -58,6 +63,7 @@ import {
   readManagedBlock,
 } from "./agents-template";
 import {
+  colorValue,
   itemStyleSchema,
   parseItemStyles,
   parsePrefs,
@@ -343,6 +349,7 @@ export const rpcContract = defineRpcContract({
       .object({
         id: z.string().min(1).max(64).optional(),
         name: categoryNameSchema,
+        color: colorValue.optional(),
         projectId: z.string().min(1).optional(),
       })
       .strict(),
@@ -896,6 +903,7 @@ export default async function plugin(bb: BbPluginApi) {
     `CREATE TABLE thread_summaries (threadId TEXT PRIMARY KEY, hint TEXT NOT NULL, fingerprint TEXT NOT NULL, summary TEXT, model TEXT, updatedAt INTEGER NOT NULL)`,
     `CREATE TABLE project_categories (id TEXT PRIMARY KEY, name TEXT NOT NULL, sort INTEGER NOT NULL DEFAULT 0)`,
     `CREATE TABLE project_category_assignments (projectId TEXT PRIMARY KEY, categoryId TEXT NOT NULL)`,
+    `ALTER TABLE project_categories ADD COLUMN color TEXT NOT NULL DEFAULT 'gray'`,
   ]);
   // Older versions recorded this normal out-of-scope condition as an error.
   // Preserve successful exports, other failures and all project/chat state.
@@ -2813,9 +2821,9 @@ export default async function plugin(bb: BbPluginApi) {
         places,
         categories: db
           .prepare(
-            "SELECT id, name FROM project_categories ORDER BY sort, rowid",
+            "SELECT id, name, color FROM project_categories ORDER BY sort, rowid",
           )
-          .all() as { id: string; name: string }[],
+          .all() as ProjectCategory[],
         projectCategories: Object.fromEntries(
           (
             db
@@ -3873,7 +3881,7 @@ export default async function plugin(bb: BbPluginApi) {
         ),
       };
     },
-    category_save: async ({ id, name, projectId }) => {
+    category_save: async ({ id, name, color, projectId }) => {
       if (projectId) {
         const project = (await bb.sdk.projects.list()).find(
           (p) => p.id === projectId,
@@ -3881,32 +3889,36 @@ export default async function plugin(bb: BbPluginApi) {
         if (!project || project.kind === "personal")
           throw new Error("Project not found.");
       }
-      const category = { id: id ?? randomUUID(), name };
-      db.transaction(() => {
+      const category = db.transaction(() => {
         const categories = db
-          .prepare("SELECT id, name FROM project_categories")
-          .all() as { id: string; name: string }[];
-        if (id && !categories.some((c) => c.id === id))
-          throw new Error("Category not found.");
+          .prepare("SELECT id, name, color FROM project_categories")
+          .all() as ProjectCategory[];
+        const existing = categories.find((c) => c.id === id);
+        if (id && !existing) throw new Error("Category not found.");
         if (
           categories.some(
             (c) => c.id !== id && c.name.toLowerCase() === name.toLowerCase(),
           )
         )
           throw new Error("A category with this name already exists.");
+        const category = {
+          id: id ?? randomUUID(),
+          name,
+          color: color ?? existing?.color ?? DEFAULT_CATEGORY_COLOR,
+        };
         if (id)
-          db.prepare("UPDATE project_categories SET name=? WHERE id=?").run(
-            name,
-            id,
-          );
+          db.prepare(
+            "UPDATE project_categories SET name=?, color=? WHERE id=?",
+          ).run(name, category.color, id);
         else
           db.prepare(
-            "INSERT INTO project_categories (id, name, sort) VALUES (?, ?, (SELECT COALESCE(MAX(sort), -1)+1 FROM project_categories))",
-          ).run(category.id, name);
+            "INSERT INTO project_categories (id, name, color, sort) VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort), -1)+1 FROM project_categories))",
+          ).run(category.id, name, category.color);
         if (projectId)
           db.prepare(
             "INSERT INTO project_category_assignments (projectId, categoryId) VALUES (?, ?) ON CONFLICT(projectId) DO UPDATE SET categoryId=excluded.categoryId",
           ).run(projectId, category.id);
+        return category;
       })();
       changed();
       return category;

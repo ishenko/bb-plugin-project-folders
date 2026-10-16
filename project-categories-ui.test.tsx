@@ -3,6 +3,7 @@ import { afterEach, beforeAll, expect, it } from "vitest";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { loadPluginApp, renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { installTestMatchMedia, setCompactViewport } from "./test-match-media";
+import type { ProjectCategory } from "./project-categories";
 
 let app: Awaited<ReturnType<typeof loadPluginApp>>;
 beforeAll(async () => {
@@ -25,8 +26,8 @@ const root = {
 const beta = { ...root, id: "p2", projectId: "p2", name: "Beta", path: "/b" };
 const gamma = { ...root, id: "p3", projectId: "p3", name: "Gamma", path: "/c" };
 function setup({ fail = false, stale = false } = {}) {
-  const categories = [
-    { id: "c1", name: "Clients" },
+  const categories: ProjectCategory[] = [
+    { id: "c1", name: "Clients", color: "blue" },
     { id: "c2", name: "Empty" },
   ];
   const projectCategories: Record<string, string> = {
@@ -49,12 +50,17 @@ function setup({ fail = false, stale = false } = {}) {
     category_save: (input: {
       id?: string;
       name: string;
+      color?: string;
       projectId?: string;
     }) => {
       if (fail) throw new Error("Save unavailable");
       saved.push(input);
-      const cat = { id: input.id ?? "new", name: input.name };
-      const existing = categories.find((c) => c.id === cat.id);
+      const existing = categories.find((c) => c.id === input.id);
+      const cat = {
+        id: input.id ?? "new",
+        name: input.name,
+        color: input.color ?? existing?.color ?? "gray",
+      };
       if (existing) Object.assign(existing, cat);
       else categories.push(cat);
       if (input.projectId) projectCategories[input.projectId] = cat.id;
@@ -320,7 +326,11 @@ it("creates and assigns a category from the project menu, then renames and delet
   });
   fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
   await view.findByRole("button", { name: "Hobby" });
-  expect(saved).toContainEqual({ name: "Hobby", projectId: "p3" });
+  expect(saved).toContainEqual({
+    name: "Hobby",
+    projectId: "p3",
+    color: "gray",
+  });
   fireEvent.contextMenu(view.getByRole("button", { name: "Hobby" }));
   fireEvent.click(await view.findByRole("menuitem", { name: "Rename" }));
   fireEvent.change(
@@ -357,4 +367,129 @@ it("keeps a failed category save open with the draft and error", async () => {
       .value,
   ).toBe("Retry me");
   expect(view.getByRole("dialog")).toBeTruthy();
+});
+
+it.each([false, true])(
+  "saves a category color from its settings and keeps it after remount (compact %s)",
+  async (compact) => {
+    setCompactViewport(compact);
+    const { view, saved, mount } = setup();
+    const header = await view.findByRole("button", { name: "Clients" });
+    expect(
+      header.firstElementChild?.classList.contains("pf-category-mark"),
+    ).toBe(true);
+    fireEvent.contextMenu(header);
+    fireEvent.click(
+      await view.findByRole("menuitem", { name: "Settings", exact: true }),
+    );
+    const dialog = await view.findByRole("dialog", { name: "Settings" });
+    const colors = within(dialog).getByRole("group", { name: "Color" });
+    expect(
+      within(colors)
+        .getByRole("radio", { name: "blue", exact: true })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    fireEvent.click(
+      within(colors).getByRole("radio", { name: "red", exact: true }),
+    );
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Save", exact: true }),
+    );
+    await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+    expect(saved).toContainEqual({ id: "c1", name: "Clients", color: "red" });
+    const color = (header.querySelector(".pf-category-mark") as HTMLElement)
+      .style.backgroundColor;
+    expect(color).toContain("0.62");
+    expect(color).toContain("27");
+    view.lifecycle.unmount();
+    const next = mount();
+    const nextHeader = await next.findByRole("button", { name: "Clients" });
+    expect(
+      (nextHeader.querySelector(".pf-category-mark") as HTMLElement).style
+        .backgroundColor,
+    ).toBe(color);
+  },
+);
+
+it("saves a custom category color and keeps it when renaming", async () => {
+  const { view, saved } = setup();
+  const header = await view.findByRole("button", { name: "Clients" });
+  fireEvent.contextMenu(header);
+  fireEvent.click(
+    await view.findByRole("menuitem", { name: "Settings", exact: true }),
+  );
+  const dialog = await view.findByRole("dialog", { name: "Settings" });
+  fireEvent.change(within(dialog).getByLabelText("Custom color"), {
+    target: { value: "#123456" },
+  });
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Save", exact: true }),
+  );
+  await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+  expect(saved).toContainEqual({ id: "c1", name: "Clients", color: "#123456" });
+  const marker = header.querySelector(".pf-category-mark") as HTMLElement;
+  expect(marker.style.backgroundColor).toBe("rgb(18, 52, 86)");
+  fireEvent.contextMenu(header);
+  fireEvent.click(
+    await view.findByRole("menuitem", { name: "Rename", exact: true }),
+  );
+  fireEvent.change(
+    await view.findByRole("textbox", { name: "Category name" }),
+    { target: { value: "Renamed" } },
+  );
+  fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+  const renamed = await view.findByRole("button", { name: "Renamed" });
+  expect(
+    (renamed.querySelector(".pf-category-mark") as HTMLElement).style
+      .backgroundColor,
+  ).toBe("rgb(18, 52, 86)");
+});
+
+it("cancels category color edits without changing the marker", async () => {
+  const { view, saved } = setup();
+  const header = await view.findByRole("button", { name: "Clients" });
+  const before = header
+    .querySelector(".pf-category-mark")!
+    .getAttribute("style");
+  fireEvent.contextMenu(header);
+  fireEvent.click(
+    await view.findByRole("menuitem", { name: "Settings", exact: true }),
+  );
+  const dialog = await view.findByRole("dialog", { name: "Settings" });
+  fireEvent.change(within(dialog).getByLabelText("Custom color"), {
+    target: { value: "#123456" },
+  });
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Cancel", exact: true }),
+  );
+  await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+  expect(saved).toEqual([]);
+  expect(header.querySelector(".pf-category-mark")!.getAttribute("style")).toBe(
+    before,
+  );
+});
+
+it("keeps a failed custom category color save open with its draft", async () => {
+  const { view } = setup({ fail: true });
+  const header = await view.findByRole("button", { name: "Clients" });
+  const before = header
+    .querySelector(".pf-category-mark")!
+    .getAttribute("style");
+  fireEvent.contextMenu(header);
+  fireEvent.click(
+    await view.findByRole("menuitem", { name: "Settings", exact: true }),
+  );
+  const dialog = await view.findByRole("dialog", { name: "Settings" });
+  const input = within(dialog).getByLabelText("Custom color");
+  fireEvent.change(input, { target: { value: "#123456" } });
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Save", exact: true }),
+  );
+  expect((await view.findByRole("alert")).textContent).toContain(
+    "Save unavailable",
+  );
+  expect((input as HTMLInputElement).value).toBe("#123456");
+  expect(header.querySelector(".pf-category-mark")!.getAttribute("style")).toBe(
+    before,
+  );
 });

@@ -1,7 +1,13 @@
 import { Fragment, useId, useState, type ReactNode } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
-import { groupProjects, type ProjectCategory } from "./project-categories";
+import {
+  groupProjects,
+  DEFAULT_CATEGORY_COLOR,
+  type ProjectCategory,
+} from "./project-categories";
+import { ColorPicker } from "./appearance";
+import { colorCss } from "./preferences";
 import { t, direction, useLanguage } from "./i18n";
 import { Icon } from "./components/ui/icon";
 import { Button } from "./components/ui/button";
@@ -23,7 +29,7 @@ import {
 
 export type CategoryDialogState =
   | { kind: "assign"; project: { id: string; name: string } }
-  | { kind: "rename" | "delete"; category: ProjectCategory };
+  | { kind: "rename" | "settings" | "delete"; category: ProjectCategory };
 
 function CategoryGroup({
   category,
@@ -85,6 +91,15 @@ function CategoryGroup({
                 }
               }}
             >
+              <span
+                className="pf-category-mark"
+                aria-hidden="true"
+                style={{
+                  backgroundColor: colorCss(
+                    category.color ?? DEFAULT_CATEGORY_COLOR,
+                  ),
+                }}
+              />
               <span className="pf-category-name">{category.name}</span>
               <Icon name={closed ? "ChevronRight" : "ChevronDown"} />
               <span className="pf-category-count" aria-hidden>
@@ -93,6 +108,12 @@ function CategoryGroup({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => onEdit({ kind: "settings", category })}
+            >
+              <Icon name="Settings" />
+              {t("Настройки")}
+            </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => onEdit({ kind: "rename", category })}
             >
@@ -176,6 +197,11 @@ export function ProjectCategoryDialog({
   const [name, setName] = useState(
     "category" in state ? state.category.name : "",
   );
+  const [color, setColor] = useState(
+    "category" in state
+      ? (state.category.color ?? DEFAULT_CATEGORY_COLOR)
+      : DEFAULT_CATEGORY_COLOR,
+  );
   const [choice, setChoice] = useState(
     state.kind === "assign" &&
       categories.some(
@@ -187,13 +213,17 @@ export function ProjectCategoryDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const deleting = state.kind === "delete";
-  const naming = creating || state.kind === "rename";
+  const editing = state.kind === "rename" || state.kind === "settings";
+  const naming = creating || editing;
+  const coloring = creating || state.kind === "settings";
   const title = deleting
     ? t("Удалить категорию")
     : naming
-      ? state.kind === "rename"
-        ? t("Переименовать")
-        : t("Новая категория")
+      ? state.kind === "settings"
+        ? t("Настройки")
+        : state.kind === "rename"
+          ? t("Переименовать")
+          : t("Новая категория")
       : t("Категория");
   const save = async () => {
     if (busy || (naming && !name.trim())) return;
@@ -205,7 +235,8 @@ export function ProjectCategoryDialog({
       else if (naming)
         await rpc.call("category_save", {
           name: name.trim(),
-          ...(state.kind === "rename" ? { id: state.category.id } : {}),
+          ...(editing ? { id: state.category.id } : {}),
+          ...(coloring ? { color } : {}),
           ...(state.kind === "assign" ? { projectId: state.project.id } : {}),
         });
       else if (state.kind === "assign")
@@ -240,16 +271,29 @@ export function ProjectCategoryDialog({
           {deleting ? (
             <p className="text-sm">{t("Проекты не будут удалены.")}</p>
           ) : naming ? (
-            <label className="pf-category-field">
-              {t("Название категории")}
-              <Input
-                autoFocus
-                value={name}
-                maxLength={80}
-                disabled={busy}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
+            <>
+              <label className="pf-category-field">
+                {t("Название категории")}
+                <Input
+                  autoFocus
+                  value={name}
+                  maxLength={80}
+                  disabled={busy}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </label>
+              {coloring && (
+                <fieldset className="pf-category-field" disabled={busy}>
+                  <legend>{t("Цвет")}</legend>
+                  <ColorPicker
+                    value={color}
+                    onChange={(value) =>
+                      setColor(value ?? DEFAULT_CATEGORY_COLOR)
+                    }
+                  />
+                </fieldset>
+              )}
+            </>
           ) : (
             <>
               <label className="pf-category-field">

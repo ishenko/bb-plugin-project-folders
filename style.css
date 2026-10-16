@@ -356,6 +356,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.pf-category-mark {
+  flex: none;
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+}
 .pf-category-count {
   flex: none;
   margin-inline-start: auto;
