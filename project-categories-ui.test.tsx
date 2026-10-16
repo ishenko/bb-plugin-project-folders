@@ -86,7 +86,13 @@ function setup({ fail = false, stale = false } = {}) {
       { activeThreadId: null, onNavigate() {} },
       {
         sidebarThreads: {
-          threads: [],
+          threads: [
+            {
+              id: "personal-chat",
+              projectId: "personal",
+              title: "Personal chat",
+            },
+          ] as never,
           projects: [
             { id: "remote", name: "Source-less", isPersonal: false },
             { id: "personal", name: "Personal", isPersonal: true },
@@ -117,7 +123,7 @@ it("groups projects once, counts source-less projects and remembers category col
   expect(view.queryByText("Beta")).toBeNull();
   expect(view.queryByText("Source-less")).toBeNull();
   expect(view.getByText("Gamma")).toBeTruthy();
-  expect(view.getByText("No project")).toBeTruthy();
+  expect(view.queryByText("No project")).toBeNull();
   view.lifecycle.unmount();
   const next = mount();
   await next.findByRole("button", { name: "Clients", expanded: false });
@@ -126,6 +132,27 @@ it("groups projects once, counts source-less projects and remembers category col
   await next.findByText("Alpha");
   next.lifecycle.unmount();
 });
+
+it.each([false, true])(
+  "hides the personal section without hiding source-less projects (compact %s)",
+  async (compact) => {
+    setCompactViewport(compact);
+    const { view } = setup();
+    await view.findByRole("button", { name: "Clients" });
+    expect(
+      view.queryByRole("button", { name: "No project", exact: true }),
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Personal", exact: true }),
+    ).toBeNull();
+    expect(view.queryByText("Personal chat")).toBeNull();
+    expect(view.getByText("Source-less")).toBeTruthy();
+    expect(view.getByText("Gamma")).toBeTruthy();
+    expect(
+      view.getByRole("button", { name: "New chat", exact: true }),
+    ).toBeTruthy();
+  },
+);
 
 it.each([false, true])(
   "opens category actions without toggling (compact %s)",

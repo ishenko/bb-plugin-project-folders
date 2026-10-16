@@ -689,11 +689,6 @@ export function Tree(props: PluginThreadListProps) {
         }
         onEdit={setCategoryDialog}
       />
-      {projects
-        .filter(
-          (p) => p.isPersonal && !data.roots.some((r) => r.projectId === p.id),
-        )
-        .map(unrootedProject)}
       <button
         className="pf-manage"
         onClick={() => nav.toPluginPanel("folders")}
