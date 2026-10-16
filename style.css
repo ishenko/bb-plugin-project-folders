@@ -22,19 +22,20 @@
   z-index: 2;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   margin: -8px -12px 6px;
   padding: 8px 12px 6px;
   background: var(--sidebar, var(--background));
 }
 .pf-new-chat {
-  flex: 1;
+  flex: none;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 34px;
-  padding: 0 8px 0 10px;
+  height: 32px;
+  padding: 0 10px 0 10px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--background);
@@ -54,7 +55,6 @@
   height: 17px;
 }
 .pf-new-chat span {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-align: start;
@@ -63,13 +63,14 @@
 }
 .pf-new-chat kbd {
   flex: none;
+  margin-inline-start: 4px;
   color: var(--muted-foreground);
   font-family: inherit;
   font-size: 11px;
 }
 .pf-toolbar-search {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 9px;
   color: var(--muted-foreground);
 }
@@ -187,8 +188,9 @@
 .pf-tooltip-dirty {
   color: var(--pf-git-dirty, oklch(0.62 0.15 60));
 }
+/* Sits under the row it describes, no wider than the sidebar row itself. */
 .pf-tip {
-  max-width: min(320px, calc(100vw - 16px));
+  max-width: min(260px, calc(100vw - 16px));
   gap: 2px;
 }
 .pf-tip-state {

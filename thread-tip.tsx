@@ -141,9 +141,9 @@ export function ThreadTip({
         <TooltipPortal>
           <TooltipContent
             className="pf-tooltip pf-tooltip-stack pf-tip"
-            side="right"
+            side="bottom"
             align="start"
-            sideOffset={10}
+            sideOffset={2}
             collisionPadding={8}
           >
             <TipBody thread={thread} />
