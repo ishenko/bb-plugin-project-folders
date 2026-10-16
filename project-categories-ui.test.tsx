@@ -116,6 +116,13 @@ it("groups projects once, counts source-less projects and remembers category col
     expanded: true,
   });
   const group = heading.closest(".pf-category")!;
+  const name = within(heading).getByText("Clients");
+  expect(name.nextElementSibling?.getAttribute("data-icon")).toBe(
+    "ChevronDown",
+  );
+  expect(name.nextElementSibling?.nextElementSibling?.textContent).toBe(
+    "3 projects",
+  );
   expect(within(group as HTMLElement).getByText("3 projects")).toBeTruthy();
   expect(within(heading.parentElement!).getAllByRole("button")).toHaveLength(1);
   expect(
@@ -123,6 +130,9 @@ it("groups projects once, counts source-less projects and remembers category col
   ).toBeTruthy();
   expect(view.getAllByText("Alpha")).toHaveLength(1);
   fireEvent.click(heading);
+  expect(name.nextElementSibling?.getAttribute("data-icon")).toBe(
+    "ChevronRight",
+  );
   expect(view.queryByRole("menuitem")).toBeNull();
   expect(view.queryByText("Alpha")).toBeNull();
   expect(view.queryByText("Beta")).toBeNull();

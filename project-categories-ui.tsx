@@ -85,8 +85,8 @@ function CategoryGroup({
                 }
               }}
             >
-              <Icon name={closed ? "ChevronRight" : "ChevronDown"} />
               <span className="pf-category-name">{category.name}</span>
+              <Icon name={closed ? "ChevronRight" : "ChevronDown"} />
               <span className="pf-category-count" aria-hidden>
                 {projects.length} {countLabel}
               </span>
