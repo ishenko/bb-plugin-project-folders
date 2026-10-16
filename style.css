@@ -3,8 +3,12 @@
   font-size: 13px;
 }
 .pf-tree {
+  --pf-row-height: 36px;
   padding: 8px 12px 16px;
   -webkit-tap-highlight-color: transparent;
+}
+.pf-tree.pf-compact {
+  --pf-row-height: 28px;
 }
 .pf-tree :is(button, a):focus {
   outline: none;
@@ -96,9 +100,15 @@
 .pf-category-heading {
   min-height: 32px;
 }
-.pf-tree:not(.pf-compact) .pf-project > .pf-heading,
-.pf-tree:not(.pf-compact) .pf-category-heading {
-  min-height: 36px;
+.pf-tree :is(.pf-heading, .pf-category-heading, .pf-thread),
+.pf-tree .pf-label,
+.pf-tree .pf-category-toggle,
+.pf-tree .pf-thread > :is(a, .pf-thread-rename) {
+  box-sizing: border-box;
+  min-height: var(--pf-row-height);
+}
+.pf-tree :is(.pf-heading, .pf-category-heading, .pf-thread) > .pf-icon {
+  height: var(--pf-row-height);
 }
 .pf-icon {
   flex: none;
@@ -1519,13 +1529,6 @@
 }
 .pf-tree .pf-children {
   margin-left: var(--pf-indent, 8px);
-}
-.pf-compact .pf-heading,
-.pf-compact .pf-category-heading {
-  min-height: 28px;
-}
-.pf-compact .pf-thread {
-  min-height: 26px;
 }
 .pf-compact .pf-label,
 .pf-compact .pf-thread a {
