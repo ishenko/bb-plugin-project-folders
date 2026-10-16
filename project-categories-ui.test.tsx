@@ -175,6 +175,24 @@ it.each([false, true])(
 );
 
 it.each([false, true])(
+  "opens section management from an icon-only settings button (compact %s)",
+  async (compact) => {
+    setCompactViewport(compact);
+    const { view } = setup();
+    await view.findByRole("button", { name: "Clients" });
+    const button = view.getByRole("button", { name: "Manage sections" });
+    expect(button.textContent).toBe("");
+    expect(button.getAttribute("title")).toBe("Manage sections");
+    expect(button.querySelector('[data-icon="Settings"]')).toBeTruthy();
+    fireEvent.click(button);
+    expect(view.inspection.navigateCalls).toContainEqual({
+      method: "toPluginPanel",
+      path: "folders",
+    });
+  },
+);
+
+it.each([false, true])(
   "opens category actions without toggling (compact %s)",
   async (compact) => {
     setCompactViewport(compact);

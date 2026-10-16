@@ -495,9 +495,10 @@
   background: var(--accent);
 }
 .pf-manage {
+  display: flex;
+  margin-top: 8px;
+  margin-left: auto;
   color: var(--muted-foreground);
-  font-size: 12px;
-  padding: 8px;
   border-radius: 6px;
 }
 .pf-panel {

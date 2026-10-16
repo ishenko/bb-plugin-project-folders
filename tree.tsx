@@ -695,10 +695,13 @@ export function Tree(props: PluginThreadListProps) {
         )
         .map(unrootedProject)}
       <button
-        className="pf-manage"
+        type="button"
+        className="pf-icon pf-manage"
+        aria-label={t("Управление разделами")}
+        title={t("Управление разделами")}
         onClick={() => nav.toPluginPanel("folders")}
       >
-        {t("Управление разделами")}
+        <Icon name="Settings" />
       </button>
       {categoryDialog && (
         <ProjectCategoryDialog
