@@ -8,8 +8,12 @@ import {
   resetGithubRateLimit,
   githubRemotes,
   githubUrlForPath,
+  githubVisibility,
+  parseGitStatus,
   parseGithubRemote,
 } from "./github-remote";
+import { execFileSync } from "node:child_process";
+import { chmod } from "node:fs/promises";
 
 const roots: string[] = [];
 async function root() {
@@ -71,10 +75,10 @@ it("reads origin from a folder with a GitHub remote and skips missing git", asyn
     paths: [withOrigin, bare, missing, worktree],
   });
   expect(remotes).toEqual([
-    { path: withOrigin, url: "https://github.com/VKirill/demo" },
-    { path: bare, url: null },
-    { path: missing, url: null },
-    { path: worktree, url: "https://github.com/VKirill/demo" },
+    { path: withOrigin, url: "https://github.com/VKirill/demo", git: null },
+    { path: bare, url: null, git: null },
+    { path: missing, url: null, git: null },
+    { path: worktree, url: "https://github.com/VKirill/demo", git: null },
   ]);
   expect(await githubUrlForPath(missing)).toBeNull();
 });
@@ -93,7 +97,7 @@ it("walks up to the checkout when the section is a nested folder", async () => {
   );
 });
 
-it("treats an anonymous GitHub 404 as private and 200 as public", async () => {
+it("confirms only public anonymously: a 404 may be private or missing", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const href = String(input);
@@ -104,9 +108,7 @@ it("treats an anonymous GitHub 404 as private and 200 as public", async () => {
     return new Response("no", { status: 403 });
   }) as typeof fetch;
   try {
-    expect(await githubPrivateForUrl("https://github.com/acme/hidden")).toBe(
-      true,
-    );
+    expect(await githubPrivateForUrl("https://github.com/acme/hidden")).toBeNull();
     expect(await githubPrivateForUrl("https://github.com/acme/open")).toBe(
       false,
     );
@@ -138,5 +140,93 @@ it("stops asking GitHub until the anonymous rate limit resets", async () => {
   } finally {
     globalThis.fetch = original;
     resetGithubRateLimit();
+  }
+});
+
+it("parses branch, upstream distance and changes from git status", () => {
+  expect(
+    parseGitStatus(
+      [
+        "# branch.oid 0123456789abcdef",
+        "# branch.head main",
+        "# branch.upstream origin/main",
+        "# branch.ab +2 -1",
+        "1 .M N... 100644 100644 100644 a b app.tsx",
+        "? notes.md",
+        "",
+      ].join("\n"),
+    ),
+  ).toEqual({
+    branch: "main",
+    detached: false,
+    upstream: true,
+    ahead: 2,
+    behind: 1,
+    changes: 2,
+  });
+  expect(
+    parseGitStatus("# branch.oid 0123456789abcdef\n# branch.head (detached)\n"),
+  ).toEqual({
+    branch: "0123456",
+    detached: true,
+    upstream: false,
+    ahead: 0,
+    behind: 0,
+    changes: 0,
+  });
+});
+
+it("reports the working tree of a real checkout once per repo", async () => {
+  const repo = await root();
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], { stdio: "ignore" });
+  git("init", "-q", "-b", "work");
+  git("remote", "add", "origin", "git@github.com:acme/demo.git");
+  await writeFile(path.join(repo, "a.txt"), "a");
+  const nested = path.join(repo, "docs");
+  await mkdir(nested);
+  const { remotes } = await githubRemotes({ paths: [repo, nested] });
+  for (const row of remotes) {
+    expect(row.url).toBe("https://github.com/acme/demo");
+    expect(row.git).toMatchObject({ branch: "work", changes: 1, upstream: false });
+  }
+});
+
+it("asks the signed-in gh for visibility and tells missing from unknown", async () => {
+  const bin = await root();
+  const gh = path.join(bin, "gh");
+  await writeFile(
+    gh,
+    [
+      "#!/bin/sh",
+      'case "$2" in',
+      '  repos/acme/secret) echo private ;;',
+      '  repos/acme/open) echo public ;;',
+      '  repos/acme/gone) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;',
+      '  *) echo "error connecting to api.github.com" >&2; exit 1 ;;',
+      "esac",
+      "",
+    ].join("\n"),
+  );
+  await chmod(gh, 0o755);
+  const original = process.env.PATH;
+  process.env.PATH = `${bin}${path.delimiter}${original ?? ""}`;
+  try {
+    const { repos } = await githubVisibility({
+      urls: [
+        "https://github.com/acme/secret",
+        "https://github.com/acme/open",
+        "https://github.com/acme/gone",
+        "https://github.com/acme/offline",
+      ],
+    });
+    expect(repos.map((r) => r.visibility)).toEqual([
+      "private",
+      "public",
+      "missing",
+      null,
+    ]);
+  } finally {
+    process.env.PATH = original;
   }
 });

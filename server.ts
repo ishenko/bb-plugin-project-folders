@@ -1,5 +1,19 @@
-import { githubPrivateForUrl, githubRateLimitedUntil } from "./github-remote";
+import {
+  githubPrivateForUrl,
+  githubRateLimitedUntil,
+  gitStatusSchema,
+  repoVisibilitySchema,
+  type GitStatus,
+  type RepoVisibility,
+} from "./github-remote";
 import { moveHostContract } from "./move-contract";
+import {
+  defaultSummarySettings,
+  makeThreadInsights,
+  summarySettingsSchema,
+  threadInsightSchema,
+  type SummarySettings,
+} from "./thread-insight";
 import { makeThreadMoves, RELOCATE_MARKER } from "./thread-move";
 import { SECTION_ENVIRONMENT_ID } from "./section-tree";
 import { makeProjectMoves } from "./project-move";
@@ -151,6 +165,10 @@ const folderSchema = z.object({
   kind: z.enum(["folder", "group"]).optional(),
   githubUrl: z.string().nullable().optional(),
   githubPrivate: z.boolean().nullable().optional(),
+  /** Null when unknown; "missing" when the signed-in gh account cannot see it. */
+  githubVisibility: repoVisibilitySchema.optional(),
+  /** Working tree of the checkout, for folders with a GitHub remote. */
+  git: gitStatusSchema.nullable().optional(),
   /** Folder on each device; the home host+path stay on the row. */
   paths: z.array(z.object({ hostId: z.string(), path: z.string() })).optional(),
 });
@@ -324,6 +342,21 @@ export const rpcContract = defineRpcContract({
         z.object({ id: z.string(), name: z.string(), connected: z.boolean() }),
       ),
     }),
+  },
+  /** Status extras for the chat tooltip: tokens, cost and a short gist. */
+  thread_insight: {
+    input: z.object({
+      threadId: z.string().min(1),
+      title: z.string().max(500),
+      hint: z.string().max(100),
+      working: z.boolean(),
+    }),
+    output: threadInsightSchema,
+  },
+  summary_settings: { input: z.null(), output: summarySettingsSchema },
+  summary_settings_save: {
+    input: summarySettingsSchema,
+    output: summarySettingsSchema,
   },
   /** Disk space of a project or section folder, read lazily for its tooltip. */
   folder_size: {
@@ -830,6 +863,11 @@ export default async function plugin(bb: BbPluginApi) {
     // Last known repo visibility (1 private, 0 public): survives restarts so
     // the anonymous GitHub rate limit is not spent again on every reload.
     `CREATE TABLE github_visibility (url TEXT PRIMARY KEY, private INTEGER NOT NULL, checkedAt INTEGER NOT NULL)`,
+    // Visibility as gh reports it, including internal and missing repos.
+    `DROP TABLE github_visibility`,
+    `CREATE TABLE github_repos (url TEXT PRIMARY KEY, visibility TEXT NOT NULL, checkedAt INTEGER NOT NULL)`,
+    // One-line gists for the chat tooltip; hint is the thread's updatedAt.
+    `CREATE TABLE thread_summaries (threadId TEXT PRIMARY KEY, hint TEXT NOT NULL, fingerprint TEXT NOT NULL, summary TEXT, model TEXT, updatedAt INTEGER NOT NULL)`,
   ]);
   // Older versions recorded this normal out-of-scope condition as an error.
   // Preserve successful exports, other failures and all project/chat state.
@@ -898,23 +936,63 @@ export default async function plugin(bb: BbPluginApi) {
     db.prepare("SELECT * FROM folders ORDER BY sort, name").all() as Folder[];
   const isGroup = (f: object | null | undefined) =>
     !!f && (f as { kind?: string }).kind === "group";
+  type PathRow = { folderId: string; hostId: string; path: string };
   const pathRows = () =>
-    db.prepare("SELECT folderId, hostId, path FROM folder_paths").all() as {
-      folderId: string;
-      hostId: string;
-      path: string;
-    }[];
-  const pathsOf = (folderId: string) =>
-    pathRows().filter((r) => r.folderId === folderId);
+    db
+      .prepare("SELECT folderId, hostId, path FROM folder_paths")
+      .all() as PathRow[];
+  /**
+   * One read of the folders and their per-device paths, indexed for a whole
+   * request: the list resolves every environment against it instead of
+   * re-reading both tables per environment.
+   */
+  type FolderSnapshot = {
+    folders: Folder[];
+    byId: Map<string, Folder>;
+    pathsById: Map<string, PathRow[]>;
+    /** host + path → non-group folders there, home path or device copy. */
+    at: Map<string, Folder[]>;
+  };
+  const snapshot = (): FolderSnapshot => {
+    const fs = folders();
+    const byId = new Map(fs.map((f) => [f.id, f]));
+    const pathsById = new Map<string, PathRow[]>();
+    const at = new Map<string, Folder[]>();
+    const add = (key: string, f: Folder) => {
+      const list = at.get(key) ?? [];
+      if (!list.includes(f)) list.push(f);
+      at.set(key, list);
+    };
+    for (const f of fs)
+      if (!isGroup(f)) add(`${f.hostId}\0${f.path}`, f);
+    for (const r of pathRows()) {
+      pathsById.set(r.folderId, [...(pathsById.get(r.folderId) ?? []), r]);
+      const f = byId.get(r.folderId);
+      if (f && !isGroup(f)) add(`${r.hostId}\0${r.path}`, f);
+    }
+    // Same order as the table read, as the unindexed lookup returns them.
+    const order = new Map(fs.map((f, i) => [f.id, i]));
+    for (const list of at.values())
+      list.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+    return { folders: fs, byId, pathsById, at };
+  };
+  const pathsOf = (folderId: string, snap?: FolderSnapshot) =>
+    snap
+      ? (snap.pathsById.get(folderId) ?? [])
+      : (db
+          .prepare(
+            "SELECT folderId, hostId, path FROM folder_paths WHERE folderId=?",
+          )
+          .all(folderId) as PathRow[]);
   const writePath = (folderId: string, hostId: string, folderPath: string) =>
     db
       .prepare(
         "INSERT INTO folder_paths (folderId, hostId, path) VALUES (?, ?, ?) ON CONFLICT(folderId, hostId) DO UPDATE SET path=excluded.path",
       )
       .run(folderId, hostId, folderPath);
-  const withPaths = (f: Folder): Folder => {
+  const withPaths = (f: Folder, snap?: FolderSnapshot): Folder => {
     if (isGroup(f)) return { ...f, paths: [] };
-    const extra = pathsOf(f.id);
+    const extra = pathsOf(f.id, snap);
     return {
       ...f,
       paths: extra.length
@@ -932,8 +1010,13 @@ export default async function plugin(bb: BbPluginApi) {
     hostId: string,
     workspace: string,
     projectId?: string | null,
+    snap?: FolderSnapshot,
   ) => {
     const p = canonicalPath(hostId, workspace);
+    if (snap)
+      return (snap.at.get(`${hostId}\0${p}`) ?? []).filter(
+        (f) => projectId == null || f.projectId === projectId,
+      );
     const ids = new Set(
       pathRows()
         .filter((r) => r.hostId === hostId && r.path === p)
@@ -946,36 +1029,69 @@ export default async function plugin(bb: BbPluginApi) {
         ((f.hostId === hostId && f.path === p) || ids.has(f.id)),
     );
   };
-  const isAncestorOf = (ancestorId: string, node: Folder) => {
+  const isAncestorOf = (
+    ancestorId: string,
+    node: Folder,
+    byId: Map<string, Folder> = new Map(folders().map((f) => [f.id, f])),
+  ) => {
     const visited = new Set<string>();
     let cur: Folder | undefined = node;
     while (cur?.parentId && !visited.has(cur.id)) {
       visited.add(cur.id);
-      cur = folders().find((x) => x.id === cur!.parentId);
+      cur = byId.get(cur.parentId);
       if (cur?.id === ancestorId) return true;
     }
     return false;
   };
   /** Unique match, or the ancestor when a section and its descendants share a folder. */
-  const sectionForMatches = (matches: Folder[]): Folder | null => {
+  const sectionForMatches = (
+    matches: Folder[],
+    snap?: FolderSnapshot,
+  ): Folder | null => {
     if (matches.length <= 1) return matches[0] ?? null;
+    const byId = snap?.byId ?? new Map(folders().map((f) => [f.id, f]));
     return (
       matches.find((candidate) =>
         matches.every(
           (other) =>
-            other.id === candidate.id || isAncestorOf(candidate.id, other),
+            other.id === candidate.id ||
+            isAncestorOf(candidate.id, other, byId),
         ),
       ) ?? null
     );
   };
-  const GITHUB_CACHE_TTL_MS = 6 * 60 * 1000;
-  // Visibility rarely changes; re-check it about once a day.
+  // Remotes rarely change but the working tree does: re-read both together,
+  // at most this often, and only while the tree is being looked at.
+  const GITHUB_CACHE_TTL_MS = 90 * 1000;
+  // Visibility rarely changes; re-check it about once a day, sooner when the
+  // repo could not be seen (it may come back after a sign-in).
   const GITHUB_VISIBILITY_TTL_MS = 24 * 60 * 60 * 1000;
-  const githubCache = new Map<string, { url: string | null; at: number }>();
-  const storedVisibility = (url: string) =>
+  const GITHUB_MISSING_TTL_MS = 60 * 60 * 1000;
+  const githubCache = new Map<
+    string,
+    { url: string | null; git: GitStatus | null; at: number }
+  >();
+  type StoredRepo = { visibility: RepoVisibility; checkedAt: number };
+  const storedRepos = () =>
+    new Map(
+      (
+        db
+          .prepare("SELECT url, visibility, checkedAt FROM github_repos")
+          .all() as { url: string; visibility: string; checkedAt: number }[]
+      ).map((r) => [
+        r.url,
+        {
+          visibility: repoVisibilitySchema.catch(null).parse(r.visibility),
+          checkedAt: r.checkedAt,
+        } satisfies StoredRepo,
+      ]),
+    );
+  const storeRepo = (url: string, visibility: NonNullable<RepoVisibility>) =>
     db
-      .prepare("SELECT private, checkedAt FROM github_visibility WHERE url=?")
-      .get(url) as { private: number; checkedAt: number } | undefined;
+      .prepare(
+        "INSERT INTO github_repos (url, visibility, checkedAt) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET visibility=excluded.visibility, checkedAt=excluded.checkedAt",
+      )
+      .run(url, visibility, Date.now());
   const githubRefreshing = new Set<string>();
   let notifyGithubChange = () => {};
   const githubCacheKey = (hostId: string, folderPath: string) =>
@@ -983,16 +1099,68 @@ export default async function plugin(bb: BbPluginApi) {
   const forgetGithub = (hostId: string, folderPath: string) => {
     githubCache.delete(githubCacheKey(hostId, folderPath));
   };
-  const withGithubUrl = (f: Folder): Folder => {
-    if (isGroup(f)) return { ...f, githubUrl: null, githubPrivate: null };
+  const withGithubUrl = (f: Folder, repos: Map<string, StoredRepo>): Folder => {
+    if (isGroup(f))
+      return {
+        ...f,
+        githubUrl: null,
+        githubPrivate: null,
+        githubVisibility: null,
+        git: null,
+      };
     const hit = githubCache.get(githubCacheKey(f.hostId, f.path));
-    const known = hit?.url ? storedVisibility(hit.url) : undefined;
+    const visibility = (hit?.url && repos.get(hit.url)?.visibility) || null;
     return {
       ...f,
       githubUrl: hit?.url ?? null,
-      githubPrivate: known ? known.private === 1 : null,
+      githubPrivate:
+        visibility === "private" || visibility === "internal"
+          ? true
+          : visibility === "public"
+            ? false
+            : null,
+      githubVisibility: visibility,
+      git: hit?.url ? hit.git : null,
     };
   };
+  const staleRepo = (known: StoredRepo | undefined, now: number) =>
+    !known ||
+    now - known.checkedAt >
+      (known.visibility === "missing"
+        ? GITHUB_MISSING_TTL_MS
+        : GITHUB_VISIBILITY_TTL_MS);
+  const refreshVisibility = async (hostId: string, urls: string[]) => {
+    const now = Date.now();
+    const known = storedRepos();
+    const stale = urls.filter((url) => staleRepo(known.get(url), now));
+    if (!stale.length) return false;
+    let dirty = false;
+    let viaGh: { url: string; visibility: RepoVisibility }[] = [];
+    try {
+      viaGh = (
+        await bb.hosts
+          .experimental_client({ contract: moveHostContract })
+          .call("github_visibility", { urls: stale }, { hostId })
+      ).repos;
+    } catch {
+      /* an older host without gh support: fall back below */
+    }
+    const answered = new Map(viaGh.map((r) => [r.url, r.visibility]));
+    for (const url of stale) {
+      let visibility = answered.get(url) ?? null;
+      // Without a signed-in gh, the anonymous API can still confirm public.
+      if (visibility === null && !process.env.VITEST) {
+        if (Date.now() < githubRateLimitedUntil()) continue;
+        if ((await githubPrivateForUrl(url)) === false) visibility = "public";
+      }
+      if (!visibility) continue;
+      if (known.get(url)?.visibility !== visibility) dirty = true;
+      storeRepo(url, visibility);
+    }
+    return dirty;
+  };
+  const sameGit = (a: GitStatus | null, b: GitStatus | null) =>
+    JSON.stringify(a) === JSON.stringify(b);
   const refreshGithubHost = async (hostId: string, paths: string[]) => {
     let dirty = false;
     try {
@@ -1005,39 +1173,26 @@ export default async function plugin(bb: BbPluginApi) {
         seen.add(row.path);
         const key = githubCacheKey(hostId, row.path);
         const prev = githubCache.get(key);
-        githubCache.set(key, { url: row.url, at: now });
-        if (prev?.url !== row.url) dirty = true;
+        const git = row.git ?? null;
+        githubCache.set(key, { url: row.url, git, at: now });
+        if (prev?.url !== row.url || !sameGit(prev?.git ?? null, git))
+          dirty = true;
       }
       for (const folderPath of paths) {
         if (seen.has(folderPath)) continue;
         const key = githubCacheKey(hostId, folderPath);
         const prev = githubCache.get(key);
-        githubCache.set(key, { url: null, at: now });
+        githubCache.set(key, { url: null, git: null, at: now });
         if (prev?.url) dirty = true;
       }
-      if (!process.env.VITEST) {
-        const urls = [
-          ...new Set(
-            [...githubCache.values()]
-              .map((hit) => hit.url)
-              .filter((url): url is string => !!url),
-          ),
-        ].filter((url) => {
-          const known = storedVisibility(url);
-          return !known || now - known.checkedAt > GITHUB_VISIBILITY_TTL_MS;
-        });
-        // One at a time: a spent rate limit stops the rest without a request each.
-        for (const url of urls) {
-          if (Date.now() < githubRateLimitedUntil()) break;
-          const hidden = await githubPrivateForUrl(url);
-          if (hidden == null) continue;
-          const prev = storedVisibility(url);
-          db.prepare(
-            "INSERT INTO github_visibility (url, private, checkedAt) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET private=excluded.private, checkedAt=excluded.checkedAt",
-          ).run(url, hidden ? 1 : 0, Date.now());
-          if (prev?.private !== (hidden ? 1 : 0)) dirty = true;
-        }
-      }
+      const urls = [
+        ...new Set(
+          result.remotes
+            .map((row) => row.url)
+            .filter((url): url is string => !!url),
+        ),
+      ];
+      if (await refreshVisibility(hostId, urls)) dirty = true;
     } catch {
       /* list must stay available when a host read fails */
     }
@@ -1063,20 +1218,19 @@ export default async function plugin(bb: BbPluginApi) {
     return bytes;
   };
   const scheduleGithubRefresh = (connected: Set<string>, items: Folder[]) => {
-    const byHost = new Map<string, string[]>();
+    const byHost = new Map<string, Set<string>>();
     const now = Date.now();
     for (const f of items) {
       if (isGroup(f) || !connected.has(f.hostId)) continue;
       const hit = githubCache.get(githubCacheKey(f.hostId, f.path));
       if (hit && now - hit.at < GITHUB_CACHE_TTL_MS) continue;
-      const list = byHost.get(f.hostId) ?? [];
-      if (!list.includes(f.path)) list.push(f.path);
-      byHost.set(f.hostId, list);
+      const list = byHost.get(f.hostId) ?? new Set<string>();
+      byHost.set(f.hostId, list.add(f.path));
     }
     for (const [hostId, paths] of byHost) {
-      if (!paths.length || githubRefreshing.has(hostId)) continue;
+      if (!paths.size || githubRefreshing.has(hostId)) continue;
       githubRefreshing.add(hostId);
-      void refreshGithubHost(hostId, paths)
+      void refreshGithubHost(hostId, [...paths])
         .then((dirty) => {
           if (dirty) notifyGithubChange();
         })
@@ -1742,6 +1896,22 @@ export default async function plugin(bb: BbPluginApi) {
   }
   const changed = () => bb.realtime.publish("changed", {});
   notifyGithubChange = changed;
+  const readSummarySettings = (): SummarySettings => {
+    const row = db
+      .prepare("SELECT data FROM preferences WHERE key='summary'")
+      .get() as { data: string } | undefined;
+    const parsed = summarySettingsSchema.safeParse({
+      ...defaultSummarySettings,
+      ...(row ? safeJson(row.data) as object : {}),
+    });
+    return parsed.success ? parsed.data : defaultSummarySettings;
+  };
+  const insights = makeThreadInsights({
+    sdk: () => bb.sdk as never,
+    db,
+    settings: readSummarySettings,
+    publish: (threadId) => bb.realtime.publish("insight", { threadId }),
+  });
   const agentsFile = (f: Folder) => path.join(f.path, "AGENTS.md");
   const isMissing = (e: unknown) =>
     /not.found|ENOENT|does not exist/i.test(String(e));
@@ -2560,7 +2730,8 @@ export default async function plugin(bb: BbPluginApi) {
     },
     list: async () => {
       const all = await bb.sdk.environments.list();
-      const fs = folders();
+      const snap = snapshot();
+      const fs = snap.folders;
       const projectRoots = await roots();
       const bindings: Record<string, string> = {};
       for (const e of all) {
@@ -2574,8 +2745,8 @@ export default async function plugin(bb: BbPluginApi) {
           )
         )
           continue;
-        const matches = foldersAt(e.hostId, e.path ?? "", e.projectId);
-        const bound = sectionForMatches(matches);
+        const matches = foldersAt(e.hostId, e.path ?? "", e.projectId, snap);
+        const bound = sectionForMatches(matches, snap);
         if (bound) bindings[e.id] = bound.id;
       }
       // Export failures re-record themselves while they keep failing; drop stale rows.
@@ -2593,8 +2764,11 @@ export default async function plugin(bb: BbPluginApi) {
         .all() as { threadId: string; folderId: string | null }[])
         places[row.threadId] = row.folderId ?? "";
       const machines = await bb.sdk.hosts.list();
-      const listedFolders = fs.map((f) => withGithubUrl(withPaths(f)));
-      const listedRoots = projectRoots.map(withGithubUrl);
+      const repos = storedRepos();
+      const listedFolders = fs.map((f) =>
+        withGithubUrl(withPaths(f, snap), repos),
+      );
+      const listedRoots = projectRoots.map((f) => withGithubUrl(f, repos));
       scheduleGithubRefresh(
         new Set(
           machines.filter((h) => h.status === "connected").map((h) => h.id),
@@ -2673,6 +2847,14 @@ export default async function plugin(bb: BbPluginApi) {
       return bb.hosts
         .experimental_client({ contract: moveHostContract })
         .call("folder_edit", { ...input, protectedPaths }, { hostId: host.id });
+    },
+    thread_insight: (input) => insights.get(input),
+    summary_settings: () => readSummarySettings(),
+    summary_settings_save: (input) => {
+      db.prepare(
+        "INSERT INTO preferences (key, data) VALUES ('summary', ?) ON CONFLICT(key) DO UPDATE SET data=excluded.data",
+      ).run(JSON.stringify(input));
+      return readSummarySettings();
     },
     folder_size: async ({ hostId, path: folderPath }) => {
       // Only folders the tree shows: not a way to measure any path on a device.

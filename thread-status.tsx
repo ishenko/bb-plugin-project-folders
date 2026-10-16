@@ -17,7 +17,16 @@ type StatusThread = Pick<
   queuedWork?: string;
 };
 
-export function ThreadStatus({ thread }: { thread: StatusThread }) {
+export type ThreadState =
+  | "waiting"
+  | "working"
+  | "error"
+  | "idle"
+  | "done"
+  | "read";
+
+/** One state per chat, in the order the sidebar should surface them. */
+export function threadState(thread: StatusThread): ThreadState {
   const runtime = thread.runtimeStatus ?? thread.status;
   const pending =
     thread.hasPendingInteraction || thread.indicator === "waiting-for-input";
@@ -40,7 +49,7 @@ export function ThreadStatus({ thread }: { thread: StatusThread }) {
     runtime === "waiting-for-host" ||
     thread.queuedWork === "waiting" ||
     ["draft", "queued-waiting", "plan-mode", "goal"].includes(thread.indicator);
-  const state = pending
+  return pending
     ? "waiting"
     : working
       ? "working"
@@ -51,6 +60,10 @@ export function ThreadStatus({ thread }: { thread: StatusThread }) {
           : thread.isUnread
             ? "done"
             : "read";
+}
+
+export function ThreadStatus({ thread }: { thread: StatusThread }) {
+  const state = threadState(thread);
   const icon =
     state === "waiting"
       ? "MessageQuestion"

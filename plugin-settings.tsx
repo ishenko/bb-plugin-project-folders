@@ -7,6 +7,7 @@ import { AgentsMarkersHint, AgentsRulesEditor } from "./agents-apply";
 import { ExecutionSettings } from "./execution-ui";
 import { SettingRow, SettingsGroup } from "./settings-ui";
 import { TagSettings } from "./tags-ui";
+import { SummarySettings } from "./summary-settings";
 import {
   SessionPolicyEditor,
   useSessionPolicyAvailable,
@@ -14,6 +15,7 @@ import {
 
 export const SETTINGS_SECTIONS = [
   "list",
+  "summary",
   "tags",
   "appearance",
   "rules",
@@ -33,6 +35,11 @@ const meta = (section: SettingsSection) =>
       icon: "ListTodo",
       title: t("Список чатов"),
       hint: t("Порядок чатов, сворачивание разделов и вид дерева."),
+    },
+    summary: {
+      icon: "AiContentGenerator01",
+      title: t("Подсказка чата"),
+      hint: t("Статус, токены, стоимость и краткая суть при наведении на чат."),
     },
     tags: {
       icon: "Tag",
@@ -129,6 +136,7 @@ export function SettingsPane({
         <p>{m.hint}</p>
       </header>
       {section === "list" && <ChatSettings />}
+      {section === "summary" && <SummarySettings />}
       {section === "tags" && <TagSettings />}
       {section === "appearance" && <AppearanceSettings />}
       {section === "rules" && (

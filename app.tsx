@@ -60,6 +60,7 @@ import {
 } from "./chat-list";
 import { t, useLanguage, LanguagePicker, direction } from "./i18n";
 import {
+  memo,
   useCallback,
   useEffect,
   useState,
@@ -114,6 +115,8 @@ import {
   Root as Tooltip,
   Trigger as TooltipTrigger,
 } from "@radix-ui/react-tooltip";
+import { ThreadTip } from "./thread-tip";
+import { TreeToolbar } from "./tree-toolbar";
 import "./style.css";
 type Target = { projectId: string; folderId: string | null };
 type Modal = {
@@ -363,18 +366,50 @@ function useTree() {
     machines: [],
   });
   const [error, setError] = useState("");
+  const shown = useRef("");
   const refresh = useCallback(() => {
     rpc.call("list").then(
       (d) => {
         // A server that predates hand-filed places simply has none.
-        setData({ ...d, places: d.places ?? {} });
+        const next = { ...d, places: d.places ?? {} };
+        // An unchanged answer must not redraw the whole tree.
+        const key = JSON.stringify(next);
+        if (key !== shown.current) {
+          shown.current = key;
+          setData(next);
+        }
         setError("");
       },
       (e) => setError(String(e)),
     );
   }, [rpc]);
-  useEffect(refresh, [refresh]);
-  useRealtime("changed", refresh);
+  // Bursts of `changed` (moves, git status, repo visibility) become one read.
+  const timer = useRef<number | undefined>(undefined);
+  const scheduleRefresh = useCallback(() => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(refresh, 150);
+  }, [refresh]);
+  useEffect(() => {
+    refresh();
+    return () => window.clearTimeout(timer.current);
+  }, [refresh]);
+  useRealtime("changed", scheduleRefresh);
+  // Back in the window: working trees may have changed in the meantime.
+  useEffect(() => {
+    let last = Date.now();
+    const onReturn = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - last < 30_000) return;
+      last = Date.now();
+      scheduleRefresh();
+    };
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
+    };
+  }, [scheduleRefresh]);
   return { rpc, data, error, refresh };
 }
 function FolderDialog({
@@ -1705,12 +1740,12 @@ function ThreadRow({
 }: {
   onMove: (thread: PluginSidebarThread) => void;
   /** Present while the chat is filed somewhere it does not work. */
-  onUnplace?: () => void;
+  onUnplace?: (thread: PluginSidebarThread) => void;
   /** The section the chat actually works in, shown when it sits elsewhere. */
   worksIn?: { label: string; path: string };
   onDrag: (thread: PluginSidebarThread | null) => void;
   thread: PluginSidebarThread;
-  active: string | null;
+  active: boolean;
   onNavigate: () => void;
 }) {
   const a = experimental_useSidebarThreadActions();
@@ -1768,7 +1803,7 @@ function ThreadRow({
   };
   return (
     <div
-      className={"pf-thread " + (active === thread.id ? "pf-active" : "")}
+      className={"pf-thread " + (active ? "pf-active" : "")}
       data-sidebar-thread-id={thread.id}
       draggable={!editing}
       onDragStart={(event) => {
@@ -1813,37 +1848,38 @@ function ThreadRow({
           }}
         />
       ) : (
-        <a
-          href={"#" + thread.id}
-          data-sidebar-thread-shortcut-target=""
-          data-sidebar-thread-id={thread.id}
-          onClick={(e) => {
-            e.preventDefault();
-            a.open(thread.id, { split: e.metaKey || e.ctrlKey });
-            onNavigate();
-          }}
-          title={thread.indicatorLabel ?? undefined}
-        >
-          <ThreadStatus thread={thread} />
-          <span
-            onDoubleClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              beginRename();
+        <ThreadTip thread={thread}>
+          <a
+            href={"#" + thread.id}
+            data-sidebar-thread-shortcut-target=""
+            data-sidebar-thread-id={thread.id}
+            onClick={(e) => {
+              e.preventDefault();
+              a.open(thread.id, { split: e.metaKey || e.ctrlKey });
+              onNavigate();
             }}
-            className={
-              "pf-thread-title" + (thread.isUnread ? " pf-unread" : "")
-            }
           >
-            {thread.title || thread.titleFallback}
-          </span>
-          {tag && <TagChip tag={tag} />}
-          {worksIn && (
-            <span className="pf-host-badge" title={worksIn.path}>
-              {worksIn.label}
+            <ThreadStatus thread={thread} />
+            <span
+              onDoubleClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                beginRename();
+              }}
+              className={
+                "pf-thread-title" + (thread.isUnread ? " pf-unread" : "")
+              }
+            >
+              {thread.title || thread.titleFallback}
             </span>
-          )}
-        </a>
+            {tag && <TagChip tag={tag} />}
+            {worksIn && (
+              <span className="pf-host-badge" title={worksIn.path}>
+                {worksIn.label}
+              </span>
+            )}
+          </a>
+        </ThreadTip>
       )}
       {renameError && (
         <span role="alert" className="text-destructive text-xs">
@@ -1949,7 +1985,7 @@ function ThreadRow({
                 </DropdownMenuSub>
               )}
               {onUnplace && (
-                <DropdownMenuItem onSelect={onUnplace}>
+                <DropdownMenuItem onSelect={() => onUnplace(thread)}>
                   <Icon name="FolderSync" />
                   {t("Вернуть в рабочую папку")}
                 </DropdownMenuItem>
@@ -1996,6 +2032,38 @@ function ThreadRow({
     </div>
   );
 }
+/** Nested values (environment, activity, host) compared by content. */
+function sameThread(a: PluginSidebarThread, b: PluginSidebarThread) {
+  if (a === b) return true;
+  const keys = Object.keys(a) as (keyof PluginSidebarThread)[];
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => {
+    const x = a[key];
+    const y = b[key];
+    return (
+      x === y ||
+      (typeof x === "object" &&
+        typeof y === "object" &&
+        JSON.stringify(x) === JSON.stringify(y))
+    );
+  });
+}
+/**
+ * Rows re-render only when their own chat changes: a status change in one chat
+ * or opening another must not redraw the hundreds of rows around it.
+ */
+const MemoThreadRow = memo(
+  ThreadRow,
+  (a, b) =>
+    a.active === b.active &&
+    a.onNavigate === b.onNavigate &&
+    a.onMove === b.onMove &&
+    a.onDrag === b.onDrag &&
+    a.onUnplace === b.onUnplace &&
+    a.worksIn?.label === b.worksIn?.label &&
+    a.worksIn?.path === b.worksIn?.path &&
+    sameThread(a.thread, b.thread),
+);
 function formatBytes(bytes: number, language: string): string {
   const units = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"];
   let value = bytes;
@@ -2061,6 +2129,88 @@ function FolderPathTip({
                   …
                 </span>
               )
+            )}
+          </TooltipContent>
+        </TooltipPortal>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+/** GitHub's own visibility labels, untranslated as on github.com. */
+const VISIBILITY_LABELS = {
+  public: "Public",
+  private: "Private",
+  internal: "Internal",
+} as const;
+function GithubLink({ url, folder }: { url: string; folder: Folder }) {
+  const git = folder.git;
+  const dirty = !!git && git.changes > 0;
+  const visibility = folder.githubVisibility;
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <a
+            className={
+              "pf-icon pf-github" +
+              (folder.githubPrivate ? " pf-github-private" : "")
+            }
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={
+              (folder.githubPrivate
+                ? t("Открыть приватный репозиторий GitHub")
+                : t("Открыть репозиторий GitHub")) +
+              (dirty ? `, ${t("Незакоммиченные изменения")}` : "")
+            }
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Icon name="GithubLogo" />
+            {dirty && <span className="pf-git-dot" aria-hidden />}
+          </a>
+        </TooltipTrigger>
+        <TooltipPortal>
+          <TooltipContent
+            className="pf-tooltip pf-tooltip-stack"
+            side="bottom"
+            align="end"
+            sideOffset={4}
+            collisionPadding={8}
+          >
+            <span className="pf-tooltip-line">
+              <span className="pf-tooltip-repo">
+                {url.replace(/^https:\/\/github\.com\//i, "")}
+              </span>
+              {/* null: not checked yet, or gh and the anonymous API both failed. */}
+              {visibility && (
+                <span className="pf-tooltip-meta">
+                  {visibility === "missing"
+                    ? t("Нет доступа")
+                    : VISIBILITY_LABELS[visibility]}
+                </span>
+              )}
+            </span>
+            {git?.branch && (
+              <span className="pf-tooltip-line pf-tooltip-git">
+                <Icon name="GitBranch" />
+                <span className="pf-tooltip-repo">{git.branch}</span>
+                {git.upstream && (git.ahead > 0 || git.behind > 0) && (
+                  <span className="pf-tooltip-meta">
+                    {[
+                      git.ahead > 0 ? `↑${git.ahead}` : "",
+                      git.behind > 0 ? `↓${git.behind}` : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  </span>
+                )}
+                {dirty && (
+                  <span className="pf-tooltip-meta pf-tooltip-dirty">
+                    {t("Изменений")}: {git.changes}
+                  </span>
+                )}
+              </span>
             )}
           </TooltipContent>
         </TooltipPortal>
@@ -2187,50 +2337,7 @@ function FolderHeading({
         );
       })()}
       {!group && folder.githubUrl && (
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a
-                className={
-                  folder.githubPrivate
-                    ? "pf-icon pf-github pf-github-private"
-                    : "pf-icon pf-github"
-                }
-                href={folder.githubUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={
-                  folder.githubPrivate
-                    ? t("Открыть приватный репозиторий GitHub")
-                    : t("Открыть репозиторий GitHub")
-                }
-                onClick={(event) => event.stopPropagation()}
-              >
-                <Icon name="GithubLogo" />
-              </a>
-            </TooltipTrigger>
-            <TooltipPortal>
-              <TooltipContent
-                className="pf-tooltip"
-                side="bottom"
-                align="end"
-                sideOffset={4}
-                collisionPadding={8}
-              >
-                <span className="pf-tooltip-repo">
-                  {folder.githubUrl.replace(/^https:\/\/github\.com\//i, "")}
-                </span>
-                {/* GitHub's own visibility labels, untranslated as on github.com;
-                    null means the visibility could not be checked. */}
-                {folder.githubPrivate != null && (
-                  <span className="pf-tooltip-meta">
-                    {folder.githubPrivate ? "Private" : "Public"}
-                  </span>
-                )}
-              </TooltipContent>
-            </TooltipPortal>
-          </Tooltip>
-        </TooltipProvider>
+        <GithubLink url={folder.githubUrl} folder={folder} />
       )}
       {!group && (
         <button
@@ -2522,15 +2629,33 @@ function Tree(props: PluginThreadListProps) {
       setMoveBusy(false);
     }
   };
-  const unplaceChat = async (chat: PluginSidebarThread) => {
+  // Stable row callbacks, so memoized rows skip unrelated re-renders.
+  const navigateRef = useRef(props.onNavigate);
+  navigateRef.current = props.onNavigate;
+  const onNavigate = useCallback(() => navigateRef.current(), []);
+  const startMove = useCallback((chat: PluginSidebarThread) => {
     setMoveError("");
-    try {
-      await rpc.call("thread_place_clear", { threadId: chat.id });
-      refresh();
-    } catch (error) {
-      setMoveError(String(error));
+    setMovingChat(chat);
+  }, []);
+  const dragChat = useCallback((chat: PluginSidebarThread | null) => {
+    setDraggedChat(chat);
+    if (!chat) {
+      setDropTarget(null);
+      setDropReason(null);
     }
-  };
+  }, []);
+  const unplace = useCallback(
+    async (chat: PluginSidebarThread) => {
+      setMoveError("");
+      try {
+        await rpc.call("thread_place_clear", { threadId: chat.id });
+        refresh();
+      } catch (error) {
+        setMoveError(String(error));
+      }
+    },
+    [rpc, refresh],
+  );
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -2623,28 +2748,17 @@ function Tree(props: PluginThreadListProps) {
     return (
       <>
         {shown.map((thread) => (
-          <ThreadRow
+          <MemoThreadRow
             key={thread.id}
             thread={thread}
-            active={props.activeThreadId}
-            onNavigate={props.onNavigate}
-            onMove={(chat) => {
-              setMoveError("");
-              setMovingChat(chat);
-            }}
+            active={props.activeThreadId === thread.id}
+            onNavigate={onNavigate}
+            onMove={startMove}
             worksIn={worksIn(thread)}
             onUnplace={
-              data.places[thread.id] === undefined
-                ? undefined
-                : () => void unplaceChat(thread)
+              data.places[thread.id] === undefined ? undefined : unplace
             }
-            onDrag={(chat) => {
-              setDraggedChat(chat);
-              if (!chat) {
-                setDropTarget(null);
-                setDropReason(null);
-              }
-            }}
+            onDrag={dragChat}
           />
         ))}
         {hasHidden && (
@@ -2855,6 +2969,7 @@ function Tree(props: PluginThreadListProps) {
       data-bb-ru-skip=""
       dir={direction()}
     >
+      <TreeToolbar onNavigate={props.onNavigate} />
       <Button
         variant="ghost"
         className="mb-2 w-full justify-start"

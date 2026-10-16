@@ -1,5 +1,6 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { gitStatusSchema, repoVisibilitySchema } from "./github-remote";
 import {
   sessionInventoryInput,
   sessionInventoryOutput,
@@ -53,7 +54,19 @@ export const moveHostContract = defineRpcContract({
     input: z.object({ paths: z.array(z.string()) }).strict(),
     output: z.object({
       remotes: z.array(
-        z.object({ path: z.string(), url: z.string().nullable() }),
+        z.object({
+          path: z.string(),
+          url: z.string().nullable(),
+          git: gitStatusSchema.nullable().optional(),
+        }),
+      ),
+    }),
+  },
+  github_visibility: {
+    input: z.object({ urls: z.array(z.string()) }).strict(),
+    output: z.object({
+      repos: z.array(
+        z.object({ url: z.string(), visibility: repoVisibilitySchema }),
       ),
     }),
   },

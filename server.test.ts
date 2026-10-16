@@ -2486,6 +2486,72 @@ describe("githubUrl on list", () => {
       await h.harness.lifecycle.dispose();
     }
   });
+  it("adds gh visibility and working tree state, asking gh once per repo", async () => {
+    const visibilityCalls: string[][] = [];
+    const host = {
+      pluginId: "project-folders",
+      agentSkillIds: ["project-folders"],
+      experimental_hostEntry: true,
+      experimental_callHostRpc: async (call: { method: string; input: unknown }) => {
+        if (call.method === "github_remotes")
+          return {
+            remotes: (call.input as { paths: string[] }).paths.map((p) => ({
+              path: p,
+              url: "https://github.com/acme/demo",
+              git: {
+                branch: "main",
+                detached: false,
+                upstream: true,
+                ahead: 1,
+                behind: 0,
+                changes: 3,
+              },
+            })),
+          };
+        if (call.method === "github_visibility") {
+          const urls = (call.input as { urls: string[] }).urls;
+          visibilityCalls.push(urls);
+          return {
+            repos: urls.map((url) => ({ url, visibility: "private" })),
+          };
+        }
+        throw new Error(`unexpected ${call.method}`);
+      },
+      sdk: {
+        projects: { list: async () => [root] as never },
+        hosts: {
+          list: async () =>
+            [{ id: "h1", name: "Mac", status: "connected" }] as never,
+        },
+        environments: { list: async () => [] },
+      },
+    };
+    const h = createFakePluginHost(host as never);
+    await plugin(h.bb);
+    const call = h.harness.behavior.callRpc;
+    type Row = {
+      githubVisibility?: string | null;
+      githubPrivate?: boolean | null;
+      git?: { branch: string; changes: number; ahead: number } | null;
+    };
+    try {
+      await call("list", null);
+      await waitFor(() => visibilityCalls.length === 1);
+      let second = (await call("list", null)) as { roots: Row[] };
+      for (let i = 0; i < 50 && !second.roots[0]?.githubVisibility; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        second = (await call("list", null)) as { roots: Row[] };
+      }
+      expect(second.roots[0]).toMatchObject({
+        githubVisibility: "private",
+        githubPrivate: true,
+        git: { branch: "main", changes: 3, ahead: 1 },
+      });
+      expect(visibilityCalls).toEqual([["https://github.com/acme/demo"]]);
+    } finally {
+      await h.harness.lifecycle.dispose();
+    }
+  });
   it("does not query a disconnected host and still returns list", async () => {
     let calls = 0;
     const h = createFakePluginHost({

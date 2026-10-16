@@ -831,6 +831,31 @@ it("loads the rules of a card opened by deep link, before the tree arrives", asy
   view.lifecycle.unmount();
 });
 
+it("shows a framed new chat button with thread search on its right", async () => {
+  const view = renderSlot(
+    app.threadLists[0]!,
+    { activeThreadId: null, onNavigate() {} },
+    { sidebarThreads: { threads: [], projects: [] }, rpc },
+  );
+  const newChat = await view.findByRole("button", { name: /^New chat/ });
+  const search = view.getByRole("button", { name: "Search chats" });
+  expect(newChat.closest(".pf-toolbar")).toBe(search.closest(".pf-toolbar"));
+  fireEvent.click(newChat);
+  expect(
+    view.inspection.sidebarActionCalls.some((c) =>
+      JSON.stringify(c).includes("openNewThread"),
+    ),
+  ).toBe(true);
+  fireEvent.click(search);
+  expect(view.inspection.sidebarNavigationCalls).toContainEqual(
+    expect.objectContaining({
+      method: "activate",
+      itemId: "__bb__/search-threads",
+    }),
+  );
+  view.lifecycle.unmount();
+});
+
 it("drops the chevron on empty rows and shows path and disk size on hover", async () => {
   const view = renderSlot(
     app.threadLists[0]!,
@@ -866,6 +891,15 @@ it("shows a GitHub icon left of new-chat only when githubUrl is set", async () =
     ...section,
     githubUrl: "https://github.com/VKirill/bb-plugin-project-folders",
     githubPrivate: true,
+    githubVisibility: "private",
+    git: {
+      branch: "main",
+      detached: false,
+      upstream: true,
+      ahead: 2,
+      behind: 0,
+      changes: 4,
+    },
   };
   const plain = {
     ...section,
@@ -928,5 +962,13 @@ it("shows a GitHub icon left of new-chat only when githubUrl is set", async () =
     "VKirill/bb-plugin-project-folders",
   );
   expect(tip.querySelector(".pf-tooltip-meta")?.textContent).toBe("Private");
+  expect(link?.querySelector(".pf-git-dot")).toBeTruthy();
+  const gitLine = tip.querySelector(".pf-tooltip-git");
+  expect(gitLine?.querySelector(".pf-tooltip-repo")?.textContent).toBe("main");
+  expect(
+    [...(gitLine?.querySelectorAll(".pf-tooltip-meta") ?? [])].map(
+      (n) => n.textContent,
+    ),
+  ).toEqual(["↑2", "Changes: 4"]);
   view.lifecycle.unmount();
 });

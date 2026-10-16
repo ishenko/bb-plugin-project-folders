@@ -15,6 +15,67 @@
   opacity: 0.5;
   cursor: wait;
 }
+/* Stays at the top while the tree scrolls, like BB's own new chat row. */
+.pf-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -8px -12px 6px;
+  padding: 8px 12px 6px;
+  background: var(--sidebar, var(--background));
+}
+.pf-new-chat {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--background);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  font-weight: 500;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.pf-tree .pf-new-chat:hover {
+  background: var(--accent);
+  border-color: color-mix(in oklch, var(--foreground) 18%, var(--border));
+}
+.pf-new-chat svg {
+  flex: none;
+  width: 17px;
+  height: 17px;
+}
+.pf-new-chat span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-new-chat kbd {
+  flex: none;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: 11px;
+}
+.pf-toolbar-search {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--muted-foreground);
+}
+.pf-tree .pf-toolbar-search:hover {
+  color: var(--foreground);
+}
 .pf-heading,
 .pf-thread {
   display: flex;
@@ -40,18 +101,37 @@
 /* The filled mark outweighs the outline icons beside it: keep it small and
    muted until hovered. Visibility is spelled out in the tooltip. */
 .pf-github {
+  position: relative;
   color: var(--muted-foreground);
-  opacity: 0.7;
 }
 .pf-github:hover,
 .pf-github:focus-visible {
   background: var(--accent);
   color: var(--foreground);
-  opacity: 1;
 }
 .pf-github svg {
   width: 14px;
   height: 14px;
+  opacity: 0.7;
+}
+.pf-github:hover svg,
+.pf-github:focus-visible svg {
+  opacity: 1;
+}
+/* Uncommitted changes in the checkout: a small dot on the mark's corner. */
+.pf-git-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--pf-git-dirty, oklch(0.75 0.15 70));
+  box-shadow: 0 0 0 1.5px var(--sidebar, var(--background));
+}
+[dir="rtl"] .pf-git-dot {
+  right: auto;
+  left: 6px;
 }
 .pf-tooltip {
   z-index: 60;
@@ -79,6 +159,79 @@
 .pf-tooltip-path {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.pf-tooltip-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+}
+.pf-tooltip-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.pf-tooltip-git {
+  align-items: center;
+  color: var(--muted-foreground);
+}
+.pf-tooltip-git svg {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-inline-end: -2px;
+}
+.pf-tooltip-git .pf-tooltip-repo {
+  font-weight: 400;
+}
+.pf-tooltip-dirty {
+  color: var(--pf-git-dirty, oklch(0.62 0.15 60));
+}
+.pf-tip {
+  max-width: min(320px, calc(100vw - 16px));
+  gap: 2px;
+}
+.pf-tip-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.pf-tip-state::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted-foreground);
+  opacity: 0.6;
+}
+.pf-tip-state[data-thread-status="working"]::before {
+  background: oklch(0.62 0.17 250);
+  opacity: 1;
+}
+.pf-tip-state[data-thread-status="waiting"]::before {
+  background: oklch(0.75 0.15 70);
+  opacity: 1;
+}
+.pf-tip-state[data-thread-status="error"]::before {
+  background: var(--destructive, oklch(0.6 0.2 25));
+  opacity: 1;
+}
+.pf-tip-state[data-thread-status="done"]::before {
+  background: oklch(0.65 0.15 150);
+  opacity: 1;
+}
+.pf-tip-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.pf-tip-stale {
+  opacity: 0.7;
 }
 /* Secondary detail as quiet text after a dot, not a pill. */
 .pf-tooltip-meta {
