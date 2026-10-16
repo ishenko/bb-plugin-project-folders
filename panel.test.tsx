@@ -856,6 +856,26 @@ it("shows a framed new chat button with thread search on its right", async () =>
   view.lifecycle.unmount();
 });
 
+it("hides BB's own new chat row only while the toolbar is mounted", async () => {
+  const native = document.createElement("button");
+  native.setAttribute("aria-keyshortcuts", "Meta+N");
+  const search = document.createElement("button");
+  search.setAttribute("aria-keyshortcuts", "Meta+K");
+  document.body.append(native, search);
+  const view = renderSlot(
+    app.threadLists[0]!,
+    { activeThreadId: null, onNavigate() {} },
+    { sidebarThreads: { threads: [], projects: [] }, rpc },
+  );
+  await view.findByRole("button", { name: /^New chat/ });
+  expect(native.style.display).toBe("none");
+  expect(search.style.display).toBe("");
+  view.lifecycle.unmount();
+  expect(native.style.display).toBe("");
+  native.remove();
+  search.remove();
+});
+
 it("drops the chevron on empty rows and shows path and disk size on hover", async () => {
   const view = renderSlot(
     app.threadLists[0]!,

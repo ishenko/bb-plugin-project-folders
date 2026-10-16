@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import * as appSdk from "@get-bb/plugin-sdk/app";
 import { experimental_useSidebarThreadActions } from "@get-bb/plugin-sdk/app";
 import { Icon } from "./components/ui/icon";
@@ -33,10 +34,54 @@ const useSearch = useNavigation
       );
     };
 
+const HIDDEN_ATTR = "data-pf-hidden-new-thread";
+
+/**
+ * BB 0.46 always draws its own «New thread» row above the sidebar list and
+ * offers no setting or slot to hide it, and plugin CSS does not reach it. While
+ * this toolbar is mounted the row is hidden (found by its Mod+N shortcut) and
+ * shown again on unmount; if BB changes the row, it simply stays visible.
+ */
+function useHideNativeNewThread() {
+  useEffect(() => {
+    const hide = () => {
+      for (const button of Array.from(
+        document.querySelectorAll<HTMLElement>("button[aria-keyshortcuts]"),
+      )) {
+        if (button.closest(".pf") || button.hasAttribute(HIDDEN_ATTR)) continue;
+        const keys = (button.getAttribute("aria-keyshortcuts") ?? "").split(
+          " ",
+        );
+        if (!keys.some((k) => /^(Meta|Control)\+N$/i.test(k))) continue;
+        button.setAttribute(HIDDEN_ATTR, "");
+        button.style.setProperty("display", "none", "important");
+      }
+    };
+    hide();
+    let timer = 0;
+    const observer = new MutationObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(hide, 50);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+      for (const button of Array.from(
+        document.querySelectorAll<HTMLElement>(`[${HIDDEN_ATTR}]`),
+      )) {
+        button.removeAttribute(HIDDEN_ATTR);
+        button.style.removeProperty("display");
+      }
+    };
+  }, []);
+}
+
 /** A framed «New chat» button with thread search pinned to its right. */
 export function TreeToolbar({ onNavigate }: { onNavigate: () => void }) {
   const actions = experimental_useSidebarThreadActions();
   const search = useSearch();
+  useHideNativeNewThread();
   const mod = mac() ? "⌘" : "Ctrl+";
   return (
     <div className="pf-toolbar">
